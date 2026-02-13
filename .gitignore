@@ -7,3 +7,4 @@ src-tauri/target/
 *.db-shm
 .env
 .env.*
+output/
