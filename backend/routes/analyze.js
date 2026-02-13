@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { readFile } from 'node:fs/promises';
-import { resolve, basename, dirname } from 'node:path';
+import { resolve } from 'node:path';
 import { runQaScorer } from '../lib/qa-runner.js';
 
 const router = Router();
@@ -23,7 +23,6 @@ router.post('/analyze', async (req, res) => {
 
   try {
     const config = await loadConfig(fullPath);
-    const stem = config.name || basename(fullPath, '.toml');
 
     // Stage 1: Create model
     results.stages.push('create');
@@ -53,12 +52,10 @@ router.post('/analyze', async (req, res) => {
             const wslSvg = toWSL(svgPath);
             results.drawingSvg = await readFile(wslSvg, 'utf8');
           } catch { /* SVG read optional */ }
+          try {
+            results.qa = await runQaScorer(freecadRoot, svgPath);
+          } catch { /* QA optional */ }
         }
-
-        // Run QA scoring
-        try {
-          results.qa = await runQaScorer(freecadRoot, stem);
-        } catch { /* QA optional */ }
       } catch (err) {
         results.errors.push({ stage: 'drawing', error: err.message });
       }

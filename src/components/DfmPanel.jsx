@@ -55,7 +55,7 @@ export default function DfmPanel({ data }) {
           const recommendation = check.recommendation || check.suggestion || '';
 
           return (
-            <div key={id} className={`dfm-card ${getSeverityClass(severity)}`}>
+            <div key={`${id}-${i}`} className={`dfm-card ${getSeverityClass(severity)}`}>
               <div className="dfm-card-header">
                 <span className="dfm-icon" dangerouslySetInnerHTML={{ __html: meta.icon }} />
                 <span className="dfm-id">{id}</span>

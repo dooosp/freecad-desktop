@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { resolve, basename } from 'node:path';
+import { resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { runQaScorer } from '../lib/qa-runner.js';
 
@@ -30,7 +30,6 @@ router.post('/drawing', async (req, res) => {
     if (!config.drawing) config.drawing = {};
 
     const result = await runScript('generate_drawing.py', config, { timeout: 120_000 });
-    const stem = config.name || basename(configPath, '.toml');
 
     // Read SVG content
     const svgEntry = result.drawing_paths?.find(p => p.format === 'svg');
@@ -41,12 +40,10 @@ router.post('/drawing', async (req, res) => {
         const svgWSL = toWSL(svgPath);
         result.svgContent = await readFile(svgWSL, 'utf8');
       } catch { /* SVG read optional */ }
+      try {
+        result.qa = await runQaScorer(freecadRoot, svgPath);
+      } catch { /* QA optional */ }
     }
-
-    // Run QA scoring
-    try {
-      result.qa = await runQaScorer(freecadRoot, stem);
-    } catch { /* QA optional */ }
 
     res.json(result);
   } catch (err) {
