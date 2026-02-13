@@ -1,0 +1,72 @@
+import React, { useState, useCallback, useRef } from 'react';
+
+export default function FileDropZone({ onFileSelect }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const inputRef = useRef(null);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      const name = file.name;
+      if (name.endsWith('.toml') || name.endsWith('.step') || name.endsWith('.stp')) {
+        setSelectedFile(name);
+        // For Tauri, we'd use the file path; for web dev, use the name
+        onFileSelect(file.path || name);
+      }
+    }
+  }, [onFileSelect]);
+
+  const handleClick = useCallback(() => {
+    inputRef.current?.click();
+  }, []);
+
+  const handleFileInput = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file.name);
+      onFileSelect(file.path || file.name);
+    }
+  }, [onFileSelect]);
+
+  return (
+    <div
+      className={`drop-zone ${isDragging ? 'dragging' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      onClick={handleClick}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".toml,.step,.stp"
+        style={{ display: 'none' }}
+        onChange={handleFileInput}
+      />
+      {selectedFile ? (
+        <div className="drop-zone-selected">
+          <span className="file-icon">&#128196;</span>
+          <span className="file-name">{selectedFile}</span>
+        </div>
+      ) : (
+        <div className="drop-zone-empty">
+          <span className="drop-icon">&#8693;</span>
+          <span>Drop STEP or TOML</span>
+        </div>
+      )}
+    </div>
+  );
+}
