@@ -40,16 +40,16 @@ app.use('/api', reportRouter);
 app.use('/artifacts', express.static(join(FREECAD_ROOT, 'output')));
 app.use('/configs', express.static(join(FREECAD_ROOT, 'configs')));
 
-// List example configs
-app.get('/api/examples', async (req, res) => {
-  const { readdir } = await import('node:fs/promises');
-  const dir = join(FREECAD_ROOT, 'configs', 'examples');
-  try {
-    const files = await readdir(dir);
-    res.json(files.filter(f => f.endsWith('.toml')));
-  } catch {
-    res.json([]);
-  }
+// Curated example configs for the desktop app
+const CURATED_EXAMPLES = [
+  'ks_flange.toml',
+  'ks_shaft.toml',
+  'ks_bracket.toml',
+  'ks_gear_housing.toml',
+];
+
+app.get('/api/examples', (req, res) => {
+  res.json(CURATED_EXAMPLES);
 });
 
 // Inspect STEP file

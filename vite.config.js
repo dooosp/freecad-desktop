@@ -12,6 +12,14 @@ export default defineConfig({
         target: 'http://localhost:18080',
         changeOrigin: true,
       },
+      '/artifacts': {
+        target: 'http://localhost:18080',
+        changeOrigin: true,
+      },
+      '/configs': {
+        target: 'http://localhost:18080',
+        changeOrigin: true,
+      },
     },
   },
   build: {
