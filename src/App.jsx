@@ -163,7 +163,7 @@ export default function App() {
 
             <div className="viewer-content">
               {viewerTab === '3d' && (
-                <ModelViewer stlPath={results?.model?.stl_path} />
+                <ModelViewer stlPath={results?.model?.stl_path || results?.model?.exports?.find(e => e.format === 'stl')?.path} />
               )}
               {viewerTab === 'drawing' && results?.drawingSvg && (
                 <DrawingViewer svgContent={results.drawingSvg} qa={results.qa} />

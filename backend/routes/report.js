@@ -27,8 +27,11 @@ router.post('/report', async (req, res) => {
   try {
     const config = await loadConfig(resolve(freecadRoot, configPath));
 
+    // Ensure export directory points to freecad-automation/output
+    const outputDir = resolve(freecadRoot, 'output');
     const reportInput = {
       ...config,
+      export: { ...config.export, directory: outputDir },
       _report_options: {
         include_drawing: includeDrawing,
         include_dfm: includeDfm,
@@ -40,11 +43,12 @@ router.post('/report', async (req, res) => {
 
     const result = await runScript('engineering_report.py', reportInput, { timeout: 180_000 });
 
-    // Read PDF if path is available
-    if (result.pdf_path) {
+    // Read PDF — result.path is relative or absolute Windows path
+    const pdfRelPath = result.pdf_path || result.path;
+    if (pdfRelPath) {
       try {
         const { toWSL } = await import(`${freecadRoot}/lib/paths.js`);
-        const pdfWSL = toWSL(result.pdf_path);
+        const pdfWSL = toWSL(pdfRelPath);
         const pdfBuffer = await readFile(pdfWSL);
         result.pdfBase64 = pdfBuffer.toString('base64');
       } catch { /* PDF read optional */ }

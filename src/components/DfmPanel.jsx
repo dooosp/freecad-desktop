@@ -48,7 +48,7 @@ export default function DfmPanel({ data }) {
       {/* Check Cards */}
       <div className="dfm-checks">
         {checks.map((check, i) => {
-          const id = check.id || check.check_id || `DFM-${String(i + 1).padStart(2, '0')}`;
+          const id = check.code || check.id || check.check_id || `DFM-${String(i + 1).padStart(2, '0')}`;
           const meta = CHECK_LABELS[id] || { name: id, icon: '&#9632;' };
           const severity = check.severity || check.status || 'ok';
           const message = check.message || check.detail || '';
@@ -81,7 +81,17 @@ export default function DfmPanel({ data }) {
       {data.summary && (
         <div className="dfm-summary">
           <h4>Summary</h4>
-          <p>{data.summary}</p>
+          {typeof data.summary === 'string' ? (
+            <p>{data.summary}</p>
+          ) : (
+            <p>
+              {data.summary.errors > 0 && <span className="severity-error">{data.summary.errors} errors</span>}
+              {data.summary.errors > 0 && data.summary.warnings > 0 && ' / '}
+              {data.summary.warnings > 0 && <span className="severity-warning">{data.summary.warnings} warnings</span>}
+              {(data.summary.errors > 0 || data.summary.warnings > 0) && data.summary.info > 0 && ' / '}
+              {data.summary.info > 0 && <span>{data.summary.info} info</span>}
+            </p>
+          )}
         </div>
       )}
     </div>

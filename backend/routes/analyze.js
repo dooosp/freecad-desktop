@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { readFile } from 'node:fs/promises';
 import { resolve, basename, dirname } from 'node:path';
+import { runQaScorer } from '../lib/qa-runner.js';
 
 const router = Router();
 
@@ -23,7 +24,6 @@ router.post('/analyze', async (req, res) => {
   try {
     const config = await loadConfig(fullPath);
     const stem = config.name || basename(fullPath, '.toml');
-    const outputDir = dirname(fullPath);
 
     // Stage 1: Create model
     results.stages.push('create');
@@ -45,7 +45,8 @@ router.post('/analyze', async (req, res) => {
         results.drawing = drawResult;
 
         // Read SVG if available
-        const svgPath = drawResult.svg_path || drawResult.drawing_path;
+        const svgEntry = drawResult.drawing_paths?.find(p => p.format === 'svg');
+        const svgPath = drawResult.svg_path || drawResult.drawing_path || svgEntry?.path;
         if (svgPath) {
           try {
             const { toWSL } = await import(`${freecadRoot}/lib/paths.js`);
@@ -56,11 +57,7 @@ router.post('/analyze', async (req, res) => {
 
         // Run QA scoring
         try {
-          const qaResult = await runScript('qa_scorer.py', {
-            ...drawConfig,
-            svg_path: drawResult.svg_path,
-          }, { timeout: 60_000 });
-          results.qa = qaResult;
+          results.qa = await runQaScorer(freecadRoot, stem);
         } catch { /* QA optional */ }
       } catch (err) {
         results.errors.push({ stage: 'drawing', error: err.message });
