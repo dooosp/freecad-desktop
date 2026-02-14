@@ -44,18 +44,24 @@ export default function SettingsPanel({ settings, onChange, activeProfile, getCa
   const handleClearCache = async () => {
     if (!clearCache) return;
     setClearing(true);
-    await clearCache();
-    const s = getCacheStats ? await getCacheStats() : null;
-    if (s) setCacheStats(s);
-    setClearing(false);
+    try {
+      await clearCache();
+      const s = getCacheStats ? await getCacheStats() : null;
+      if (s) setCacheStats(s);
+    } finally {
+      setClearing(false);
+    }
   };
 
   const handleRunDiagnostics = async () => {
     if (!getDiagnostics) return;
     setDiagLoading(true);
-    const result = await getDiagnostics();
-    if (result) setDiagResults(result);
-    setDiagLoading(false);
+    try {
+      const result = await getDiagnostics();
+      if (result) setDiagResults(result);
+    } finally {
+      setDiagLoading(false);
+    }
   };
 
   const update = (key, value) => {

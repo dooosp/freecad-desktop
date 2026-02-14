@@ -21,7 +21,8 @@ export default function FileDropZone({ onFileSelect }) {
     if (files.length > 0) {
       const file = files[0];
       const name = file.name;
-      if (name.endsWith('.toml') || name.endsWith('.step') || name.endsWith('.stp') || name.endsWith('.fcstudio')) {
+      const lower = name.toLowerCase();
+      if (lower.endsWith('.toml') || lower.endsWith('.step') || lower.endsWith('.stp') || lower.endsWith('.fcstudio')) {
         setSelectedFile(name);
         // For Tauri, we'd use the file path; for web dev, use the name
         onFileSelect(file.path || name, file);
@@ -36,8 +37,11 @@ export default function FileDropZone({ onFileSelect }) {
   const handleFileInput = useCallback((e) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file.name);
-      onFileSelect(file.path || file.name, file);
+      const lower = file.name.toLowerCase();
+      if (lower.endsWith('.toml') || lower.endsWith('.step') || lower.endsWith('.stp') || lower.endsWith('.fcstudio')) {
+        setSelectedFile(file.name);
+        onFileSelect(file.path || file.name, file);
+      }
     }
   }, [onFileSelect]);
 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { access, readdir, constants } from 'node:fs/promises';
+import { access, constants } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -25,9 +25,26 @@ async function runCmd(cmd, args, timeout = 5000) {
 }
 
 const REQUIRED_SCRIPTS = [
-  'create_model.py', 'dfm_check.py', 'generate_drawing.py',
-  'tolerance_analysis.py', 'cost_estimator.py', 'generate_report.py',
+  'create_model.py',
+  'inspect_model.py',
+  'dfm_checker.py',
+  'generate_drawing.py',
+  'tolerance_analysis.py',
+  'cost_estimator.py',
+  'engineering_report.py',
 ];
+
+async function getPythonCandidates() {
+  const candidates = [];
+  if (process.env.PYTHON_EXE_WSL) candidates.push(process.env.PYTHON_EXE_WSL);
+  if (process.env.PYTHON_EXE) candidates.push(process.env.PYTHON_EXE);
+
+  const freecadPy = await runCmd('wslpath', ['-u', 'C:\\Program Files\\FreeCAD 1.0\\bin\\python.exe']);
+  if (freecadPy) candidates.push(freecadPy);
+
+  candidates.push('python3');
+  return [...new Set(candidates)];
+}
 
 router.get('/', async (req, res) => {
   const root = req.app.locals.freecadRoot;
@@ -46,14 +63,42 @@ router.get('/', async (req, res) => {
   if (!wslpath) hasWarning = true;
 
   // 3. python
-  const pythonExe = process.env.PYTHON_EXE_WSL || 'python3';
-  const pyVersion = await runCmd(pythonExe, ['--version']);
-  checks.push({ id: 'python', label: 'Python Executable', status: pyVersion ? 'pass' : 'fail', detail: pyVersion || `${pythonExe} not found` });
+  const pythonCandidates = await getPythonCandidates();
+  let pythonExe = null;
+  let pyVersion = null;
+  for (const candidate of pythonCandidates) {
+    const version = await runCmd(candidate, ['--version']);
+    if (version) {
+      pythonExe = candidate;
+      pyVersion = version;
+      break;
+    }
+  }
+  checks.push({
+    id: 'python',
+    label: 'Python Executable',
+    status: pyVersion ? 'pass' : 'fail',
+    detail: pyVersion ? `${pyVersion} (${pythonExe})` : `No runnable Python found (checked: ${pythonCandidates.join(', ')})`,
+  });
   if (!pyVersion) hasFailure = true;
 
   // 4. FreeCAD module
-  const fcVersion = await runCmd(pythonExe, ['-c', 'import FreeCAD; print(FreeCAD.Version()[0] + "." + FreeCAD.Version()[1])']);
-  checks.push({ id: 'freecadModule', label: 'FreeCAD Module', status: fcVersion ? 'pass' : 'fail', detail: fcVersion ? `FreeCAD ${fcVersion}` : 'FreeCAD module not importable' });
+  let fcVersion = null;
+  let fcPythonExe = pythonExe;
+  for (const candidate of pythonCandidates) {
+    const version = await runCmd(candidate, ['-c', 'import FreeCAD; print(FreeCAD.Version()[0] + "." + FreeCAD.Version()[1])']);
+    if (version) {
+      fcVersion = version;
+      fcPythonExe = candidate;
+      break;
+    }
+  }
+  checks.push({
+    id: 'freecadModule',
+    label: 'FreeCAD Module',
+    status: fcVersion ? 'pass' : 'fail',
+    detail: fcVersion ? `FreeCAD ${fcVersion} (${fcPythonExe})` : 'FreeCAD module not importable from detected Python executables',
+  });
   if (!fcVersion) hasFailure = true;
 
   // 5. scripts
