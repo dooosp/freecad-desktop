@@ -37,10 +37,19 @@ router.post('/analyze', async (req, res) => {
 
   try {
     const config = await loadConfig(fullPath);
+    const hasShapes = Array.isArray(config.shapes) && config.shapes.length > 0;
+    const hasAssemblyParts = Array.isArray(config.parts) && config.parts.length > 0;
+    const canCreateModel = hasShapes || hasAssemblyParts;
 
     // Stage 1: Create model
     send('stage', { stage: 'create', status: 'start' });
     try {
+      if (!canCreateModel) {
+        const errMsg = config.import?.source_step
+          ? 'Imported STEP template has no shapes/parts yet. Edit the generated TOML before Analyze.'
+          : 'Config has no shapes/parts. Define geometry before Analyze.';
+        throw new Error(errMsg);
+      }
       const createResult = await runScript('create_model.py', config, { timeout: 120_000 });
       results.model = createResult;
       results.stages.push('create');

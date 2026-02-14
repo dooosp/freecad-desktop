@@ -5,7 +5,14 @@ export default function StepImportModal({ data, onUseConfig, onSaveConfig, onCan
   const [edited, setEdited] = useState(false);
 
   const analysis = data.analysis || {};
-  const features = analysis.features || analysis.suggested_config || {};
+  const features = analysis.features || {};
+  const suggested = analysis.suggested_config || {};
+  const cylinders = Array.isArray(features.cylinders)
+    ? features.cylinders.length
+    : (Number.isFinite(analysis.cylinders) ? analysis.cylinders : 0);
+  const boltCircles = Array.isArray(features.bolt_circles)
+    ? features.bolt_circles.length
+    : (Number.isFinite(analysis.bolt_circles) ? analysis.bolt_circles : 0);
 
   const handleTomlChange = (e) => {
     setToml(e.target.value);
@@ -31,11 +38,16 @@ export default function StepImportModal({ data, onUseConfig, onSaveConfig, onCan
           {/* Feature summary */}
           <div className="step-features">
             <h3>Detected Features</h3>
+            {analysis.warning && (
+              <div className="error-bar">
+                <span className="error-message">{analysis.warning}</span>
+              </div>
+            )}
             <div className="feature-grid">
-              {features.name && (
+              {suggested.name && (
                 <div className="feature-row">
                   <span className="feature-label">Name</span>
-                  <span className="feature-value">{features.name}</span>
+                  <span className="feature-value">{suggested.name}</span>
                 </div>
               )}
               {analysis.part_type && (
@@ -52,22 +64,22 @@ export default function StepImportModal({ data, onUseConfig, onSaveConfig, onCan
                   </span>
                 </div>
               )}
-              {analysis.cylinders > 0 && (
+              {cylinders > 0 && (
                 <div className="feature-row">
                   <span className="feature-label">Cylinders</span>
-                  <span className="feature-value">{analysis.cylinders}</span>
+                  <span className="feature-value">{cylinders}</span>
                 </div>
               )}
-              {analysis.bolt_circles > 0 && (
+              {boltCircles > 0 && (
                 <div className="feature-row">
                   <span className="feature-label">Bolt Circles</span>
-                  <span className="feature-value">{analysis.bolt_circles}</span>
+                  <span className="feature-value">{boltCircles}</span>
                 </div>
               )}
-              {features.manufacturing?.process && (
+              {suggested.manufacturing?.process && (
                 <div className="feature-row">
                   <span className="feature-label">Process</span>
-                  <span className="feature-value">{features.manufacturing.process}</span>
+                  <span className="feature-value">{suggested.manufacturing.process}</span>
                 </div>
               )}
             </div>
