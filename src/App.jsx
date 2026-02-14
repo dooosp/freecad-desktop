@@ -55,6 +55,9 @@ export default function App() {
   // Profile compare state
   const [showCompareModal, setShowCompareModal] = useState(false);
 
+  // Project state
+  const [projectName, setProjectName] = useState(null);
+
   useEffect(() => {
     backend.getExamples().then(ex => ex && setExamples(ex));
     backend.getProfiles().then(profs => profs && setProfiles(profs)).catch(() => setProfiles([]));
@@ -71,11 +74,29 @@ export default function App() {
     }
   }, [activeProfile]);
 
+  const restoreProject = useCallback((projectData) => {
+    if (projectData.config?.path) setConfigPath(projectData.config.path);
+    if (projectData.settings) setSettings(projectData.settings);
+    if (projectData.profile) setActiveProfile(projectData.profile);
+    if (projectData.results) setResults(projectData.results);
+    if (projectData.ui?.viewerTab) setViewerTab(projectData.ui.viewerTab);
+    if (projectData.ui?.analysisTab) setAnalysisTab(projectData.ui.analysisTab);
+    setProjectName(projectData.name || null);
+  }, []);
+
   const handleFileSelect = useCallback(async (path, rawFile) => {
     const lower = path.toLowerCase();
+    if (lower.endsWith('.fcstudio')) {
+      try {
+        const { projectData } = await backend.openProject(path);
+        restoreProject(projectData);
+      } catch {
+        // error set by backend
+      }
+      return;
+    }
     if (lower.endsWith('.step') || lower.endsWith('.stp')) {
       try {
-        // Tauri provides real path, web provides File object
         const input = rawFile?.path ? rawFile.path : (rawFile || path);
         const data = await backend.importStep(input);
         setStepImportData(data);
@@ -86,7 +107,7 @@ export default function App() {
     }
     setConfigPath(path);
     setResults(null);
-  }, [backend]);
+  }, [backend, restoreProject]);
 
   const handleAnalyze = useCallback(async () => {
     if (!configPath) return;
@@ -284,6 +305,42 @@ export default function App() {
     }
   }, [activeProfile, backend]);
 
+  // Project handlers
+  const handleSaveProject = useCallback(async () => {
+    const name = projectName || (configPath ? configPath.replace(/.*\//, '').replace(/\.\w+$/, '') : 'untitled');
+    const projectData = {
+      name,
+      created: new Date().toISOString(),
+      config: configPath ? { path: configPath } : null,
+      settings,
+      profile: activeProfile,
+      results: results || null,
+      ui: { viewerTab, analysisTab },
+    };
+    try {
+      const { filename } = await backend.saveProject(projectData);
+      setProjectName(name);
+      backend.setError(null);
+    } catch {
+      // error set by backend
+    }
+  }, [projectName, configPath, settings, activeProfile, results, viewerTab, analysisTab, backend]);
+
+  const handleOpenProject = useCallback(async () => {
+    try {
+      const recent = await backend.getRecentProjects();
+      if (!recent || recent.length === 0) {
+        backend.setError('No recent projects found');
+        return;
+      }
+      // Open the most recent project
+      const { projectData } = await backend.openProject(recent[0].path);
+      restoreProject(projectData);
+    } catch {
+      // error set by backend
+    }
+  }, [backend, restoreProject]);
+
   // Export pack handlers
   const handleOpenExportPack = useCallback(() => {
     if (!configPath) return;
@@ -313,6 +370,22 @@ export default function App() {
           <h1 className="logo">FreeCAD Studio</h1>
         </div>
         <div className="header-actions">
+          <button
+            className="btn btn-secondary"
+            disabled={backend.loading}
+            onClick={handleOpenProject}
+            title="Open recent project"
+          >
+            Open
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={!configPath || backend.loading}
+            onClick={handleSaveProject}
+            title="Save project"
+          >
+            Save
+          </button>
           {backend.loading && backend.progress && backend.progress.status !== 'done' && (
             <button className="btn btn-secondary" onClick={backend.cancelAnalyze}>
               Cancel
@@ -396,6 +469,7 @@ export default function App() {
             activeProfile={activeProfileData}
             getCacheStats={backend.getCacheStats}
             clearCache={backend.clearCache}
+            getDiagnostics={backend.getDiagnostics}
           />
         </aside>
 

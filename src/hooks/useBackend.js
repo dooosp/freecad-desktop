@@ -250,6 +250,14 @@ export function useBackend() {
   }, [call]);
   const deleteReportTemplate = useCallback((name) => call(`/report-templates/${name}`, {}, 'DELETE'), [call]);
 
+  // Project APIs
+  const saveProject = useCallback((projectData) => call('/project/save', { projectData }), [call]);
+  const openProject = useCallback((filePath) => call('/project/open', { filePath }), [call]);
+  const getRecentProjects = useCallback(() => get('/project/recent'), [get]);
+
+  // Diagnostics API
+  const getDiagnostics = useCallback(() => get('/diagnostics'), [get]);
+
   // Cache APIs
   const getCacheStats = useCallback(() => get('/cache/stats'), [get]);
   const clearCache = useCallback((stage) => {
@@ -288,6 +296,8 @@ export function useBackend() {
     getProfiles, getProfile, saveProfile, deleteProfile, compareProfiles,
     getReportTemplates, getReportTemplate, saveReportTemplate, deleteReportTemplate,
     exportPack,
+    saveProject, openProject, getRecentProjects,
+    getDiagnostics,
     getCacheStats, clearCache,
     setError,
   };

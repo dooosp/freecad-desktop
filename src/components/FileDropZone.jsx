@@ -21,7 +21,7 @@ export default function FileDropZone({ onFileSelect }) {
     if (files.length > 0) {
       const file = files[0];
       const name = file.name;
-      if (name.endsWith('.toml') || name.endsWith('.step') || name.endsWith('.stp')) {
+      if (name.endsWith('.toml') || name.endsWith('.step') || name.endsWith('.stp') || name.endsWith('.fcstudio')) {
         setSelectedFile(name);
         // For Tauri, we'd use the file path; for web dev, use the name
         onFileSelect(file.path || name, file);
@@ -52,7 +52,7 @@ export default function FileDropZone({ onFileSelect }) {
       <input
         ref={inputRef}
         type="file"
-        accept=".toml,.step,.stp"
+        accept=".toml,.step,.stp,.fcstudio"
         style={{ display: 'none' }}
         onChange={handleFileInput}
       />
@@ -64,7 +64,7 @@ export default function FileDropZone({ onFileSelect }) {
       ) : (
         <div className="drop-zone-empty">
           <span className="drop-icon">&#8693;</span>
-          <span>Drop STEP or TOML</span>
+          <span>Drop STEP, TOML, or .fcstudio</span>
         </div>
       )}
     </div>

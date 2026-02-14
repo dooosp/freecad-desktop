@@ -31,9 +31,11 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function SettingsPanel({ settings, onChange, activeProfile, getCacheStats, clearCache }) {
+export default function SettingsPanel({ settings, onChange, activeProfile, getCacheStats, clearCache, getDiagnostics }) {
   const [cacheStats, setCacheStats] = useState(null);
   const [clearing, setClearing] = useState(false);
+  const [diagResults, setDiagResults] = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
 
   useEffect(() => {
     if (getCacheStats) getCacheStats().then(s => s && setCacheStats(s));
@@ -46,6 +48,14 @@ export default function SettingsPanel({ settings, onChange, activeProfile, getCa
     const s = getCacheStats ? await getCacheStats() : null;
     if (s) setCacheStats(s);
     setClearing(false);
+  };
+
+  const handleRunDiagnostics = async () => {
+    if (!getDiagnostics) return;
+    setDiagLoading(true);
+    const result = await getDiagnostics();
+    if (result) setDiagResults(result);
+    setDiagLoading(false);
   };
 
   const update = (key, value) => {
@@ -144,6 +154,30 @@ export default function SettingsPanel({ settings, onChange, activeProfile, getCa
           </div>
         </div>
       )}
+
+      <div className="setting-group diagnostics-section">
+        <label>Diagnostics</label>
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={handleRunDiagnostics}
+          disabled={diagLoading}
+        >
+          {diagLoading ? 'Checking...' : 'Run Check'}
+        </button>
+        {diagResults && (
+          <div className="diag-list">
+            {diagResults.checks.map(c => (
+              <div key={c.id} className="diag-item">
+                <span className={`diag-status ${c.status}`}>
+                  {c.status === 'pass' ? '\u2713' : c.status === 'fail' ? '\u2717' : '\u26A0'}
+                </span>
+                <span className="diag-label">{c.label}</span>
+                <span className="diag-detail">{c.detail}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
