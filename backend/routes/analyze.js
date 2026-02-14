@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { readFile, copyFile, mkdir } from 'node:fs/promises';
+import { resolve, basename, extname, join } from 'node:path';
 import { runQaScorer } from '../lib/qa-runner.js';
 import { postprocessSvg } from '../lib/svg-postprocess.js';
 import { AnalysisCache } from '../lib/analysis-cache.js';
@@ -59,26 +59,51 @@ router.post('/analyze', async (req, res) => {
       }
     }
 
-    // Stage 1: Create model
+    // Stage 1: Create model (or STEP Direct Track)
+    const isStepDirect = !canCreateModel && !!config.import?.source_step;
     send('stage', { stage: 'create', status: 'start' });
     try {
-      if (!canCreateModel) {
-        const errMsg = config.import?.source_step
-          ? 'Imported STEP template has no shapes/parts yet. Edit the generated TOML before Analyze.'
-          : 'Config has no shapes/parts. Define geometry before Analyze.';
-        throw new Error(errMsg);
-      }
-      const createKey = cache.getCacheKey('create', config, options);
-      const createCached = await cache.checkCache(createKey);
-      if (createCached.hit) {
-        results.model = createCached.entry.result;
+      if (isStepDirect) {
+        // STEP Direct Track: use original STEP, skip create_model.py
+        const srcStep = config.import.source_step;
+        const inspectResult = await runScript('inspect_model.py', { file: srcStep }, { timeout: 60_000 });
+        const model = inspectResult?.model || inspectResult || {};
+        const name = config.import?.name || basename(srcStep, extname(srcStep));
+
+        // Copy STEP to output/ so downstream scripts can find it
+        const outputDir = join(freecadRoot, 'output');
+        await mkdir(outputDir, { recursive: true });
+        // source_step may be Linux or Windows path
+        let resolvedSrc = srcStep;
+        if (srcStep.includes('\\') || /^[A-Z]:/i.test(srcStep)) {
+          const { toWSL } = await import(`${freecadRoot}/lib/paths.js`);
+          resolvedSrc = toWSL(srcStep);
+        }
+        const destStep = join(outputDir, `${name}.step`);
+        await copyFile(resolvedSrc, destStep).catch(() => {});
+
+        results.model = {
+          success: true,
+          model: { ...model, name },
+          exports: [{ format: 'step', path: `output/${name}.step` }],
+          stepDirect: true,
+        };
+      } else if (!canCreateModel) {
+        throw new Error('Config has no shapes/parts. Define geometry before Analyze.');
       } else {
-        const createResult = await runScript('create_model.py', config, { timeout: 120_000 });
-        results.model = createResult;
-        await cache.storeCache(createKey, createResult, 'create');
+        // Normal TOML Track
+        const createKey = cache.getCacheKey('create', config, options);
+        const createCached = await cache.checkCache(createKey);
+        if (createCached.hit) {
+          results.model = createCached.entry.result;
+        } else {
+          const createResult = await runScript('create_model.py', config, { timeout: 120_000 });
+          results.model = createResult;
+          await cache.storeCache(createKey, createResult, 'create');
+        }
       }
       results.stages.push('create');
-      send('stage', { stage: 'create', status: 'done', cached: createCached.hit });
+      send('stage', { stage: 'create', status: 'done', stepDirect: isStepDirect });
     } catch (err) {
       results.errors.push({ stage: 'create', error: err.message });
       send('stage', { stage: 'create', status: 'error', error: err.message });

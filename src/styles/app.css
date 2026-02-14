@@ -352,6 +352,23 @@ body {
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .tab:disabled { opacity: 0.3; cursor: not-allowed; }
 
+.tab-spacer { flex: 1; }
+
+.btn-rerun {
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  margin: auto 4px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-rerun:hover:not(:disabled) { background: var(--bg-card); color: var(--accent); }
+.btn-rerun:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .badge {
   font-size: 10px;
   padding: 1px 6px;

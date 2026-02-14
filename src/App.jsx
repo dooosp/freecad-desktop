@@ -109,6 +109,45 @@ export default function App() {
     }
   }, [configPath, settings, activeProfile, backend]);
 
+  const [rerunning, setRerunning] = useState(null); // 'dfm' | 'cost' | 'drawing' | null
+
+  const handleRerunStage = useCallback(async (stage) => {
+    if (!configPath || !results) return;
+    setRerunning(stage);
+    backend.setError(null);
+    try {
+      const profileArg = activeProfile !== '_default' ? activeProfile : undefined;
+      if (stage === 'dfm') {
+        const data = await backend.runDfm(configPath, settings.process, profileArg);
+        setResults(prev => ({ ...prev, dfm: data }));
+      } else if (stage === 'cost') {
+        const data = await backend.runCost(configPath, {
+          process: settings.process,
+          material: settings.material,
+          batchSize: settings.batch,
+          dfmResult: results.dfm || null,
+          profileName: profileArg,
+        });
+        setResults(prev => ({ ...prev, cost: data }));
+      } else if (stage === 'drawing') {
+        const data = await backend.runDrawing(configPath);
+        setResults(prev => ({
+          ...prev,
+          drawing: data,
+          drawingSvg: data.svgContent || prev.drawingSvg,
+          qa: data.qa || prev.qa,
+        }));
+      } else if (stage === 'tolerance') {
+        const data = await backend.runTolerance(configPath);
+        setResults(prev => ({ ...prev, tolerance: data }));
+      }
+    } catch {
+      // error set by backend
+    } finally {
+      setRerunning(null);
+    }
+  }, [configPath, results, settings, activeProfile, backend]);
+
   const handleOpenReportConfig = useCallback(() => {
     setShowReportModal(true);
   }, []);
@@ -433,6 +472,15 @@ export default function App() {
                   disabled={!results.cost}
                 >
                   Cost
+                </button>
+                <span className="tab-spacer" />
+                <button
+                  className="btn-rerun"
+                  disabled={rerunning !== null || backend.loading}
+                  onClick={() => handleRerunStage(analysisTab)}
+                  title={`Re-run ${analysisTab.toUpperCase()} only`}
+                >
+                  {rerunning === analysisTab ? '\u21BB ...' : '\u21BB Rerun'}
                 </button>
               </div>
 
