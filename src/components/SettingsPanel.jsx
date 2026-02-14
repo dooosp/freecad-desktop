@@ -92,6 +92,17 @@ export default function SettingsPanel({ settings, onChange, activeProfile }) {
           onChange={(e) => update('batch', parseInt(e.target.value) || 1)}
         />
       </div>
+
+      <div className="setting-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={settings.dxfExport || false}
+            onChange={(e) => update('dxfExport', e.target.checked)}
+          />
+          DXF Export
+        </label>
+      </div>
     </div>
   );
 }

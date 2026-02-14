@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 const EXPORT_OPTIONS = [
   { key: 'step', label: 'STEP File', default: true },
   { key: 'svg', label: 'SVG Drawing', default: true },
+  { key: 'dxf', label: 'DXF Drawing', default: false },
   { key: 'drawing_pdf', label: 'Drawing PDF', default: true },
   { key: 'dfm', label: 'DFM JSON', default: true },
   { key: 'tolerance', label: 'Tolerance JSON', default: true },
@@ -34,8 +35,9 @@ export default function ExportPackModal({ configPath, activeProfile, templateNam
     const lines = [`${name}_${rev}/`];
     if (includes.step) lines.push('  ├─ 01_model/');
     if (includes.step) lines.push(`  │   └─ ${name}.step`);
-    if (includes.svg || includes.drawing_pdf) lines.push('  ├─ 02_drawing/');
+    if (includes.svg || includes.dxf || includes.drawing_pdf) lines.push('  ├─ 02_drawing/');
     if (includes.svg) lines.push(`  │   ├─ ${name}_drawing.svg`);
+    if (includes.dxf) lines.push(`  │   ├─ ${name}_front.dxf`);
     if (includes.drawing_pdf) lines.push(`  │   └─ ${name}_drawing.pdf`);
     if (includes.dfm || includes.tolerance || includes.cost) lines.push('  ├─ 03_analysis/');
     if (includes.dfm) lines.push('  │   ├─ dfm_report.json');

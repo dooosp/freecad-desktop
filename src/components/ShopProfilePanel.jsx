@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function ShopProfilePanel({ profiles, activeProfile, activeProfileData, onProfileChange, onEditProfile, onNewProfile }) {
+export default function ShopProfilePanel({ profiles, activeProfile, activeProfileData, onProfileChange, onEditProfile, onNewProfile, onCompareProfiles }) {
   if (!profiles || profiles.length === 0) {
     return (
       <div className="profile-panel">
@@ -34,6 +34,9 @@ export default function ShopProfilePanel({ profiles, activeProfile, activeProfil
         </select>
         <button className="btn btn-icon" onClick={onEditProfile} title="Edit Profile">✎</button>
         <button className="btn btn-icon" onClick={onNewProfile} title="New Profile">+</button>
+        {profiles.length > 1 && (
+          <button className="btn btn-icon" onClick={onCompareProfiles} title="Compare Profiles">⇔</button>
+        )}
       </div>
       {activeProfileData && activeProfile !== '_default' && (
         <div className="profile-summary">

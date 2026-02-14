@@ -25,7 +25,7 @@ const DEFAULT_OPTIONS = {
   signature: true,
 };
 
-export default function ReportConfigModal({ templates, onGenerate, onCancel, backend }) {
+export default function ReportConfigModal({ templates, onGenerate, onCancel, backend, onEditTemplate, onNewTemplate }) {
   const [selectedTemplate, setSelectedTemplate] = useState('_default');
   const [metadata, setMetadata] = useState(DEFAULT_METADATA);
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
@@ -76,12 +76,20 @@ export default function ReportConfigModal({ templates, onGenerate, onCancel, bac
           {/* Template Selection */}
           <div className="form-group">
             <label>Report Template</label>
-            <select value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>
-              <option value="_default">Default</option>
-              {loadedTemplates.map(t => (
-                <option key={t.name} value={t.name}>{t.name}</option>
-              ))}
-            </select>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <select value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)} style={{ flex: 1 }}>
+                <option value="_default">Default (Legacy 2-page)</option>
+                {loadedTemplates.map(t => (
+                  <option key={t.name} value={t.name}>{t.label || t.name}</option>
+                ))}
+              </select>
+              {onEditTemplate && selectedTemplate !== '_default' && (
+                <button className="btn btn-icon" onClick={() => onEditTemplate(selectedTemplate)} title="Edit Template">✎</button>
+              )}
+              {onNewTemplate && (
+                <button className="btn btn-icon" onClick={onNewTemplate} title="New Template">+</button>
+              )}
+            </div>
           </div>
 
           {/* Metadata */}

@@ -232,6 +232,7 @@ export function useBackend() {
     return call(`/profiles${isNew ? '' : '/' + payload.name}`, payload, isNew ? 'POST' : 'PUT');
   }, [call]);
   const deleteProfile = useCallback((name) => call(`/profiles/${name}`, {}, 'DELETE'), [call]);
+  const compareProfiles = useCallback((opts) => call('/profiles/compare', opts), [call]);
 
   // Report Template APIs
   const getReportTemplates = useCallback(() => get('/report-templates'), [get]);
@@ -272,7 +273,7 @@ export function useBackend() {
     runDfm, runDrawing, runTolerance, runCost,
     generateReport, getExamples,
     importStep, saveStepConfig,
-    getProfiles, getProfile, saveProfile, deleteProfile,
+    getProfiles, getProfile, saveProfile, deleteProfile, compareProfiles,
     getReportTemplates, getReportTemplate, saveReportTemplate, deleteReportTemplate,
     exportPack,
     setError,

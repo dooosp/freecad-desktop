@@ -83,6 +83,7 @@ router.post('/analyze', async (req, res) => {
       try {
         const drawConfig = { ...config };
         if (!drawConfig.drawing) drawConfig.drawing = {};
+        if (options.dxfExport) drawConfig.drawing.dxf = true;
         const drawResult = await runScript('generate_drawing.py', drawConfig, { timeout: 120_000 });
         results.drawing = drawResult;
 

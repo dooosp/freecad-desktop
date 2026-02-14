@@ -117,6 +117,16 @@ export async function buildPack(options) {
     }
   }
 
+  if (include.dxf) {
+    const dxfPath = getExportPathByFormat(results.drawing, 'dxf');
+    const dxfSrc = toOutputPath(outputDir, dxfPath);
+    if (dxfSrc) {
+      const file = basename(dxfSrc);
+      copyFileSync(dxfSrc, join(dirs.drawing, file));
+      includedDrawingFiles.push(file);
+    }
+  }
+
   if (include.drawing_pdf) {
     const drawingPdfPath = getExportPathByFormat(results.drawing, 'pdf');
     const pdfSrc = toOutputPath(outputDir, drawingPdfPath);

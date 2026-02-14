@@ -9,6 +9,8 @@ import ShopProfilePanel from './components/ShopProfilePanel.jsx';
 import ShopProfileModal from './components/ShopProfileModal.jsx';
 import ReportConfigModal from './components/ReportConfigModal.jsx';
 import ExportPackModal from './components/ExportPackModal.jsx';
+import ProfileCompareModal from './components/ProfileCompareModal.jsx';
+import TemplateEditorModal from './components/TemplateEditorModal.jsx';
 
 // Lazy: Three.js (~600KB), Chart.js (~200KB) 컴포넌트
 const ModelViewer = lazy(() => import('./components/ModelViewer.jsx'));
@@ -43,8 +45,15 @@ export default function App() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [lastTemplateName, setLastTemplateName] = useState(null);
 
+  // Template editor state
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(null);
+
   // Export pack state
   const [showExportModal, setShowExportModal] = useState(false);
+
+  // Profile compare state
+  const [showCompareModal, setShowCompareModal] = useState(false);
 
   useEffect(() => {
     backend.getExamples().then(ex => ex && setExamples(ex));
@@ -91,6 +100,7 @@ export default function App() {
         process: settings.process,
         material: settings.material,
         batch: settings.batch,
+        dxfExport: settings.dxfExport || false,
         profileName: activeProfile !== '_default' ? activeProfile : undefined,
       });
       setResults(data);
@@ -122,6 +132,42 @@ export default function App() {
       // error handled by backend
     }
   }, [configPath, results, activeProfile, backend]);
+
+  // Template editor handlers
+  const handleEditTemplate = useCallback(async (name) => {
+    try {
+      const tpl = await backend.getReportTemplate(name);
+      setEditingTemplate(tpl);
+      setShowTemplateEditor(true);
+    } catch {
+      backend.setError('Failed to load template');
+    }
+  }, [backend]);
+
+  const handleNewTemplate = useCallback(() => {
+    setEditingTemplate({ _isNew: true });
+    setShowTemplateEditor(true);
+  }, []);
+
+  const handleSaveTemplate = useCallback(async (tpl) => {
+    try {
+      await backend.saveReportTemplate(tpl);
+      setShowTemplateEditor(false);
+      setEditingTemplate(null);
+    } catch {
+      backend.setError('Failed to save template');
+    }
+  }, [backend]);
+
+  const handleDeleteTemplate = useCallback(async (name) => {
+    try {
+      await backend.deleteReportTemplate(name);
+      setShowTemplateEditor(false);
+      setEditingTemplate(null);
+    } catch {
+      backend.setError('Failed to delete template');
+    }
+  }, [backend]);
 
   const handleUseStepConfig = useCallback((cfgPath) => {
     setConfigPath(cfgPath);
@@ -283,6 +329,7 @@ export default function App() {
             onProfileChange={handleProfileChange}
             onEditProfile={handleEditProfile}
             onNewProfile={handleNewProfile}
+            onCompareProfiles={() => setShowCompareModal(true)}
           />
 
           <div className="sidebar-section">
@@ -455,6 +502,29 @@ export default function App() {
           backend={backend}
           onGenerate={handleGenerateReportWithTemplate}
           onCancel={() => setShowReportModal(false)}
+          onEditTemplate={handleEditTemplate}
+          onNewTemplate={handleNewTemplate}
+        />
+      )}
+
+      {/* Template Editor Modal */}
+      {showTemplateEditor && (
+        <TemplateEditorModal
+          template={editingTemplate}
+          onSave={handleSaveTemplate}
+          onDelete={handleDeleteTemplate}
+          onCancel={() => { setShowTemplateEditor(false); setEditingTemplate(null); }}
+        />
+      )}
+
+      {/* Profile Compare Modal */}
+      {showCompareModal && (
+        <ProfileCompareModal
+          profiles={profiles}
+          configPath={configPath}
+          settings={settings}
+          backend={backend}
+          onCancel={() => setShowCompareModal(false)}
         />
       )}
 
