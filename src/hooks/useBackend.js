@@ -55,15 +55,15 @@ export function useBackend() {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      const { profileName, ...pipelineOptions } = options;
+
       fetch(`${API_BASE}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           configPath,
-          options: {
-            ...options,
-            profileName: options.profileName || undefined,
-          }
+          profileName: profileName || undefined,
+          options: pipelineOptions,
         }),
         signal: controller.signal,
       })
@@ -168,15 +168,20 @@ export function useBackend() {
 
   const inspect = useCallback((body) => call('/inspect', body), [call]);
   const create = useCallback((body) => call('/create', body), [call]);
-  const runDfm = useCallback((configPath, process) => call('/dfm', { configPath, process }), [call]);
+  const runDfm = useCallback((configPath, process, profileName) => {
+    return call('/dfm', { configPath, process, profileName: profileName || undefined });
+  }, [call]);
   const runDrawing = useCallback((configPath, preset) => call('/drawing', { configPath, preset }), [call]);
   const runTolerance = useCallback((configPath) => call('/tolerance', { configPath }), [call]);
-  const runCost = useCallback((configPath, opts) => call('/cost', { configPath, ...opts }), [call]);
+  const runCost = useCallback((configPath, opts) => {
+    return call('/cost', { configPath, ...opts });
+  }, [call]);
   const generateReport = useCallback((configPath, opts) => {
     return call('/report', {
       configPath,
       analysisResults: opts.analysisResults,
       templateName: opts.templateName || undefined,
+      profileName: opts.profileName || undefined,
       metadata: opts.metadata || undefined,
       sections: opts.sections || undefined,
       options: opts.options || undefined,
@@ -221,9 +226,10 @@ export function useBackend() {
   const getProfiles = useCallback(() => get('/profiles'), [get]);
   const getProfile = useCallback((name) => get(`/profiles/${name}`), [get]);
   const saveProfile = useCallback((profile) => {
-    const isNew = profile._isNew;
-    delete profile._isNew; // Remove flag before sending
-    return call(`/profiles${isNew ? '' : '/' + profile.name}`, profile, isNew ? 'POST' : 'PUT');
+    const payload = { ...profile };
+    const isNew = payload._isNew;
+    delete payload._isNew;
+    return call(`/profiles${isNew ? '' : '/' + payload.name}`, payload, isNew ? 'POST' : 'PUT');
   }, [call]);
   const deleteProfile = useCallback((name) => call(`/profiles/${name}`, {}, 'DELETE'), [call]);
 
@@ -231,9 +237,10 @@ export function useBackend() {
   const getReportTemplates = useCallback(() => get('/report-templates'), [get]);
   const getReportTemplate = useCallback((name) => get(`/report-templates/${name}`), [get]);
   const saveReportTemplate = useCallback((tpl) => {
-    const isNew = tpl._isNew;
-    delete tpl._isNew;
-    return call(`/report-templates${isNew ? '' : '/' + tpl.name}`, tpl, isNew ? 'POST' : 'PUT');
+    const payload = { ...tpl };
+    const isNew = payload._isNew;
+    delete payload._isNew;
+    return call(`/report-templates${isNew ? '' : '/' + payload.name}`, payload, isNew ? 'POST' : 'PUT');
   }, [call]);
   const deleteReportTemplate = useCallback((name) => call(`/report-templates/${name}`, {}, 'DELETE'), [call]);
 

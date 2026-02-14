@@ -47,7 +47,7 @@ router.get('/:name', async (req, res) => {
   try {
     const content = await readFile(templatePath, 'utf8');
     const template = JSON.parse(content);
-    res.json(template);
+    res.json({ name: req.params.name, ...template });
   } catch (err) {
     res.status(404).json({ error: 'Template not found' });
   }
@@ -62,6 +62,7 @@ router.post('/', async (req, res) => {
   const { name, ...templateData } = req.body;
 
   if (!name) return res.status(400).json({ error: 'name required' });
+  if (name === '_default') return res.status(400).json({ error: 'name _default is reserved' });
   if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
     return res.status(400).json({ error: 'Invalid name format (use alphanumeric, _, -)' });
   }
@@ -69,8 +70,16 @@ router.post('/', async (req, res) => {
   const templatePath = join(freecadRoot, 'configs', 'report-templates', `${name}.json`);
 
   try {
+    try {
+      await readFile(templatePath, 'utf8');
+      return res.status(409).json({ error: 'Template already exists' });
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+
     const now = new Date().toISOString();
     const template = {
+      name,
       ...templateData,
       created: now,
       updated: now,
@@ -97,6 +106,7 @@ router.put('/:name', async (req, res) => {
     const updated = {
       ...current,
       ...req.body,
+      name: req.params.name,
       created: current.created, // preserve original
       updated: new Date().toISOString(),
     };
@@ -123,6 +133,9 @@ router.delete('/:name', async (req, res) => {
     await unlink(templatePath);
     res.json({ success: true });
   } catch (err) {
+    if (err.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Template not found' });
+    }
     res.status(500).json({ error: err.message });
   }
 });

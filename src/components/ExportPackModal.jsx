@@ -11,7 +11,7 @@ const EXPORT_OPTIONS = [
   { key: 'bom', label: 'Bill of Materials CSV', default: true },
 ];
 
-export default function ExportPackModal({ configPath, onExport, onCancel }) {
+export default function ExportPackModal({ configPath, activeProfile, templateName, onExport, onCancel }) {
   const [partName, setPartName] = useState('');
   const [revision, setRevision] = useState('A');
   const [organization, setOrganization] = useState('');
@@ -32,32 +32,33 @@ export default function ExportPackModal({ configPath, onExport, onCancel }) {
     const name = partName || 'part';
     const rev = revision || 'A';
     const lines = [`${name}_${rev}/`];
-    if (includes.step) lines.push(`  └─ step/`);
-    if (includes.step) lines.push(`      └─ ${name}.step`);
-    if (includes.svg || includes.drawing_pdf) lines.push(`  └─ drawing/`);
-    if (includes.svg) lines.push(`      ├─ ${name}.svg`);
-    if (includes.drawing_pdf) lines.push(`      └─ ${name}_drawing.pdf`);
-    if (includes.dfm || includes.tolerance || includes.cost) lines.push(`  └─ analysis/`);
-    if (includes.dfm) lines.push(`      ├─ dfm.json`);
-    if (includes.tolerance) lines.push(`      ├─ tolerance.json`);
-    if (includes.cost) lines.push(`      └─ cost.json`);
-    if (includes.report) lines.push(`  └─ report/`);
-    if (includes.report) lines.push(`      └─ engineering_report.pdf`);
-    if (includes.bom) lines.push(`  └─ bom/`);
-    if (includes.bom) lines.push(`      └─ bom.csv`);
+    if (includes.step) lines.push('  ├─ 01_model/');
+    if (includes.step) lines.push(`  │   └─ ${name}.step`);
+    if (includes.svg || includes.drawing_pdf) lines.push('  ├─ 02_drawing/');
+    if (includes.svg) lines.push(`  │   ├─ ${name}_drawing.svg`);
+    if (includes.drawing_pdf) lines.push(`  │   └─ ${name}_drawing.pdf`);
+    if (includes.dfm || includes.tolerance || includes.cost) lines.push('  ├─ 03_analysis/');
+    if (includes.dfm) lines.push('  │   ├─ dfm_report.json');
+    if (includes.tolerance) lines.push('  │   ├─ tolerance_report.json');
+    if (includes.cost) lines.push('  │   ├─ cost_estimate.json');
+    if (includes.cost) lines.push('  │   └─ cost_breakdown.csv');
+    if (includes.report) lines.push('  ├─ 04_report/');
+    if (includes.report) lines.push(`  │   └─ ${name}_report.pdf`);
+    if (includes.bom) lines.push('  ├─ 05_bom/');
+    if (includes.bom) lines.push('  │   └─ bom.csv');
+    lines.push('  ├─ 06_config/');
+    lines.push('  │   └─ source_config.toml');
+    lines.push('  ├─ manifest.json');
     lines.push(`  └─ README.txt`);
     return lines.join('\n');
   }, [partName, revision, includes]);
 
   const handleExport = async () => {
-    if (!partName) {
-      alert('Part name is required');
-      return;
-    }
     setLoading(true);
     try {
       await onExport({
         configPath,
+        partName: partName || undefined,
         revision,
         organization,
         include: includes,
@@ -112,6 +113,9 @@ export default function ExportPackModal({ configPath, onExport, onCancel }) {
           {/* Include Checkboxes */}
           <div className="form-group">
             <label>Include in Package</label>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+              Profile: {activeProfile || '_default'} | Template: {templateName || 'legacy'}
+            </div>
             <div className="include-grid">
               {EXPORT_OPTIONS.map(opt => (
                 <div key={opt.key} className="section-toggle">
@@ -138,7 +142,7 @@ export default function ExportPackModal({ configPath, onExport, onCancel }) {
           <button className="btn btn-secondary" onClick={onCancel}>
             Cancel
           </button>
-          <button className="btn btn-primary" onClick={handleExport} disabled={loading || !partName}>
+          <button className="btn btn-primary" onClick={handleExport} disabled={loading}>
             {loading ? 'Generating...' : 'Generate Package'}
           </button>
         </div>

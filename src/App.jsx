@@ -41,6 +41,7 @@ export default function App() {
 
   // Report config state
   const [showReportModal, setShowReportModal] = useState(false);
+  const [lastTemplateName, setLastTemplateName] = useState(null);
 
   // Export pack state
   const [showExportModal, setShowExportModal] = useState(false);
@@ -108,17 +109,19 @@ export default function App() {
       const data = await backend.generateReport(configPath, {
         analysisResults: results,
         templateName: config.templateName,
+        profileName: activeProfile !== '_default' ? activeProfile : undefined,
         metadata: config.metadata,
         sections: config.sections,
         options: config.options,
       });
       setResults(prev => ({ ...prev, report: data }));
+      setLastTemplateName(config.templateName || null);
       setViewerTab('pdf');
       setShowReportModal(false);
     } catch {
       // error handled by backend
     }
-  }, [configPath, results, backend]);
+  }, [configPath, results, activeProfile, backend]);
 
   const handleUseStepConfig = useCallback((cfgPath) => {
     setConfigPath(cfgPath);
@@ -204,12 +207,18 @@ export default function App() {
 
   const handleExportPack = useCallback(async (options) => {
     try {
-      await backend.exportPack(options);
+      await backend.exportPack({
+        ...options,
+        analysisResults: results || {},
+        reportPdfBase64: results?.report?.pdfBase64 || null,
+        profileName: activeProfile !== '_default' ? activeProfile : '',
+        templateName: lastTemplateName || '',
+      });
       setShowExportModal(false);
     } catch (err) {
       backend.setError('Failed to generate export pack');
     }
-  }, [backend]);
+  }, [results, activeProfile, lastTemplateName, backend]);
 
   return (
     <div className="app">
@@ -453,6 +462,8 @@ export default function App() {
       {showExportModal && (
         <ExportPackModal
           configPath={configPath}
+          activeProfile={activeProfile}
+          templateName={lastTemplateName}
           onExport={handleExportPack}
           onCancel={() => setShowExportModal(false)}
         />

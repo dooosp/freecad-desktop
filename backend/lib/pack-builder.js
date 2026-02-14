@@ -1,9 +1,36 @@
 import archiver from 'archiver';
 import { createWriteStream, mkdirSync, copyFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFileSync, rmSync } from 'node:fs';
 import { generateBomCsv, generateCostCsv } from './csv-generator.js';
+
+function getExportPathByFormat(result = {}, format) {
+  if (!result || typeof result !== 'object') return null;
+
+  const directKey = `${format}_path`;
+  if (typeof result[directKey] === 'string' && result[directKey]) return result[directKey];
+
+  if (Array.isArray(result.exports)) {
+    const found = result.exports.find(e => e?.format === format && typeof e?.path === 'string');
+    if (found?.path) return found.path;
+  }
+
+  if (Array.isArray(result.drawing_paths)) {
+    const found = result.drawing_paths.find(e => e?.format === format && typeof e?.path === 'string');
+    if (found?.path) return found.path;
+  }
+
+  return null;
+}
+
+function toOutputPath(outputDir, candidatePath) {
+  if (!candidatePath || typeof candidatePath !== 'string') return null;
+  const normalized = candidatePath.replaceAll('\\', '/');
+  const file = basename(normalized);
+  const resolved = join(outputDir, file);
+  return existsSync(resolved) ? resolved : null;
+}
 
 /**
  * Build a deliverable pack (zip) with organized structure
@@ -17,6 +44,7 @@ import { generateBomCsv, generateCostCsv } from './csv-generator.js';
  * @param {string} options.templateName - Report template name (optional)
  * @param {string} options.revision - Revision string (e.g., "Rev.A")
  * @param {string} options.organization - Organization name
+ * @param {string} options.partName - Optional part name override
  * @param {object} options.include - What to include { step, svg, drawing_pdf, dfm, tolerance, cost, report, bom }
  * @param {string} options.reportPdfBase64 - Base64 PDF data (optional)
  * @returns {Promise<{ zipBase64: string, filename: string }>}
@@ -31,11 +59,12 @@ export async function buildPack(options) {
     templateName = '',
     revision = 'Rev.A',
     organization = '',
+    partName: partNameOverride = '',
     include = {},
     reportPdfBase64 = null,
   } = options;
 
-  const partName = config.name || 'part';
+  const partName = partNameOverride || config.name || 'part';
   const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
   const packName = `${partName}_${revision}_${timestamp}`;
   const tempRoot = join(tmpdir(), packName);
@@ -60,32 +89,47 @@ export async function buildPack(options) {
   Object.values(dirs).forEach(dir => mkdirSync(dir, { recursive: true }));
 
   const outputDir = join(freecadRoot, 'output');
+  const includedModelFiles = [];
+  const includedDrawingFiles = [];
+  const includedReportFiles = [];
+  const includedAnalysisFiles = [];
+  const includedBomFiles = [];
 
   // 1. Model files
-  if (include.step && results.model?.step_path) {
-    const stepSrc = join(outputDir, basename(results.model.step_path));
-    if (existsSync(stepSrc)) {
-      copyFileSync(stepSrc, join(dirs.model, basename(results.model.step_path)));
+  if (include.step) {
+    const stepPath = getExportPathByFormat(results.model, 'step');
+    const stepSrc = toOutputPath(outputDir, stepPath);
+    if (stepSrc) {
+      const file = basename(stepSrc);
+      copyFileSync(stepSrc, join(dirs.model, file));
+      includedModelFiles.push(file);
     }
   }
 
   // 2. Drawing files
-  if (include.svg && results.drawing?.svg_path) {
-    const svgSrc = join(outputDir, basename(results.drawing.svg_path));
-    if (existsSync(svgSrc)) {
-      copyFileSync(svgSrc, join(dirs.drawing, basename(results.drawing.svg_path)));
+  if (include.svg) {
+    const svgPath = getExportPathByFormat(results.drawing, 'svg');
+    const svgSrc = toOutputPath(outputDir, svgPath);
+    if (svgSrc) {
+      const file = basename(svgSrc);
+      copyFileSync(svgSrc, join(dirs.drawing, file));
+      includedDrawingFiles.push(file);
     }
   }
 
-  if (include.drawing_pdf && results.drawing?.pdf_path) {
-    const pdfSrc = join(outputDir, basename(results.drawing.pdf_path));
-    if (existsSync(pdfSrc)) {
-      copyFileSync(pdfSrc, join(dirs.drawing, basename(results.drawing.pdf_path)));
+  if (include.drawing_pdf) {
+    const drawingPdfPath = getExportPathByFormat(results.drawing, 'pdf');
+    const pdfSrc = toOutputPath(outputDir, drawingPdfPath);
+    if (pdfSrc) {
+      const file = basename(pdfSrc);
+      copyFileSync(pdfSrc, join(dirs.drawing, file));
+      includedDrawingFiles.push(file);
     }
   }
 
   // 3. Analysis files
   if (include.dfm && results.dfm) {
+    includedAnalysisFiles.push('dfm_report.json');
     writeFileSync(
       join(dirs.analysis, 'dfm_report.json'),
       JSON.stringify(results.dfm, null, 2),
@@ -94,6 +138,7 @@ export async function buildPack(options) {
   }
 
   if (include.tolerance && results.tolerance) {
+    includedAnalysisFiles.push('tolerance_report.json');
     writeFileSync(
       join(dirs.analysis, 'tolerance_report.json'),
       JSON.stringify(results.tolerance, null, 2),
@@ -102,6 +147,7 @@ export async function buildPack(options) {
   }
 
   if (include.cost && results.cost) {
+    includedAnalysisFiles.push('cost_estimate.json');
     writeFileSync(
       join(dirs.analysis, 'cost_estimate.json'),
       JSON.stringify(results.cost, null, 2),
@@ -111,22 +157,27 @@ export async function buildPack(options) {
     // CSV export
     const costCsv = generateCostCsv(results.cost);
     writeFileSync(join(dirs.analysis, 'cost_breakdown.csv'), costCsv, 'utf8');
+    includedAnalysisFiles.push('cost_breakdown.csv');
   }
 
   // 4. Report PDF
   if (include.report && reportPdfBase64) {
     const pdfBuffer = Buffer.from(reportPdfBase64, 'base64');
-    writeFileSync(join(dirs.report, `${partName}_report.pdf`), pdfBuffer);
+    const reportFile = `${partName}_report.pdf`;
+    writeFileSync(join(dirs.report, reportFile), pdfBuffer);
+    includedReportFiles.push(reportFile);
   }
 
   // 5. BOM
   if (include.bom) {
     const bomCsv = generateBomCsv(config);
     writeFileSync(join(dirs.bom, 'bom.csv'), bomCsv, 'utf8');
+    includedBomFiles.push('bom.csv');
   }
 
   // 6. Config
-  copyFileSync(join(freecadRoot, configPath), join(dirs.config, basename(configPath)));
+  const configAbsPath = resolve(freecadRoot, configPath);
+  copyFileSync(configAbsPath, join(dirs.config, basename(configPath)));
 
   // 7. Manifest
   const manifest = {
@@ -139,14 +190,11 @@ export async function buildPack(options) {
     generated_at: new Date().toISOString(),
     config_file: basename(configPath),
     included_files: {
-      model: include.step && results.model?.step_path ? [basename(results.model.step_path)] : [],
-      drawing: [
-        include.svg && results.drawing?.svg_path ? basename(results.drawing.svg_path) : null,
-        include.drawing_pdf && results.drawing?.pdf_path ? basename(results.drawing.pdf_path) : null,
-      ].filter(Boolean),
-      analysis: Object.keys(include).filter(k => include[k] && ['dfm', 'tolerance', 'cost'].includes(k)),
-      report: include.report ? [`${partName}_report.pdf`] : [],
-      bom: include.bom ? ['bom.csv'] : [],
+      model: includedModelFiles,
+      drawing: includedDrawingFiles,
+      analysis: includedAnalysisFiles,
+      report: includedReportFiles,
+      bom: includedBomFiles,
     },
   };
 
