@@ -166,12 +166,46 @@ export function useBackend() {
   const generateReport = useCallback((configPath, opts) => call('/report', { configPath, ...opts }), [call]);
   const getExamples = useCallback(() => get('/examples'), [get]);
 
+  const importStep = useCallback(async (fileOrPath) => {
+    setLoading(true);
+    setError(null);
+    try {
+      let res;
+      if (typeof fileOrPath === 'string') {
+        // Tauri mode: send file path as JSON
+        res = await fetch(`${API_BASE}/step/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: fileOrPath }),
+        });
+      } else {
+        // Web mode: send as FormData
+        const form = new FormData();
+        form.append('file', fileOrPath);
+        res = await fetch(`${API_BASE}/step/import`, { method: 'POST', body: form });
+      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const saveStepConfig = useCallback((configPath, tomlString) => {
+    return call('/step/save-config', { configPath, tomlString });
+  }, [call]);
+
   return {
     loading, error, progress,
     analyze, cancelAnalyze,
     inspect, create,
     runDfm, runDrawing, runTolerance, runCost,
     generateReport, getExamples,
+    importStep, saveStepConfig,
     setError,
   };
 }

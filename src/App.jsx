@@ -1,20 +1,24 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useBackend } from './hooks/useBackend.js';
 import FileDropZone from './components/FileDropZone.jsx';
-import ModelViewer from './components/ModelViewer.jsx';
-import DrawingViewer from './components/DrawingViewer.jsx';
 import DfmPanel from './components/DfmPanel.jsx';
-import TolerancePanel from './components/TolerancePanel.jsx';
-import CostPanel from './components/CostPanel.jsx';
-import ReportPreview from './components/ReportPreview.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import ProgressBar from './components/ProgressBar.jsx';
+import StepImportModal from './components/StepImportModal.jsx';
+
+// Lazy: Three.js (~600KB), Chart.js (~200KB) 컴포넌트
+const ModelViewer = lazy(() => import('./components/ModelViewer.jsx'));
+const DrawingViewer = lazy(() => import('./components/DrawingViewer.jsx'));
+const TolerancePanel = lazy(() => import('./components/TolerancePanel.jsx'));
+const CostPanel = lazy(() => import('./components/CostPanel.jsx'));
+const ReportPreview = lazy(() => import('./components/ReportPreview.jsx'));
 
 export default function App() {
   const backend = useBackend();
   const [configPath, setConfigPath] = useState(null);
   const [examples, setExamples] = useState([]);
   const [results, setResults] = useState(null);
+  const [stepImportData, setStepImportData] = useState(null);
   const [viewerTab, setViewerTab] = useState('3d'); // '3d' | 'drawing' | 'pdf'
   const [analysisTab, setAnalysisTab] = useState('dfm'); // 'dfm' | 'tolerance' | 'cost'
   const [settings, setSettings] = useState({
@@ -28,10 +32,22 @@ export default function App() {
     backend.getExamples().then(ex => ex && setExamples(ex));
   }, []);
 
-  const handleFileSelect = useCallback((path) => {
+  const handleFileSelect = useCallback(async (path, rawFile) => {
+    const lower = path.toLowerCase();
+    if (lower.endsWith('.step') || lower.endsWith('.stp')) {
+      try {
+        // Tauri provides real path, web provides File object
+        const input = rawFile?.path ? rawFile.path : (rawFile || path);
+        const data = await backend.importStep(input);
+        setStepImportData(data);
+      } catch {
+        // error set by backend
+      }
+      return;
+    }
     setConfigPath(path);
     setResults(null);
-  }, []);
+  }, [backend]);
 
   const handleAnalyze = useCallback(async () => {
     if (!configPath) return;
@@ -64,6 +80,16 @@ export default function App() {
       // error handled by backend
     }
   }, [configPath, results, backend]);
+
+  const handleUseStepConfig = useCallback((cfgPath) => {
+    setConfigPath(cfgPath);
+    setResults(null);
+    setStepImportData(null);
+  }, []);
+
+  const handleSaveStepConfig = useCallback(async (cfgPath, tomlString) => {
+    await backend.saveStepConfig(cfgPath, tomlString);
+  }, [backend]);
 
   return (
     <div className="app">
@@ -164,15 +190,17 @@ export default function App() {
             </div>
 
             <div className="viewer-content">
-              {viewerTab === '3d' && (
-                <ModelViewer stlPath={results?.model?.stl_path || results?.model?.exports?.find(e => e.format === 'stl')?.path} />
-              )}
-              {viewerTab === 'drawing' && results?.drawingSvg && (
-                <DrawingViewer svgContent={results.drawingSvg} qa={results.qa} />
-              )}
-              {viewerTab === 'pdf' && results?.report?.pdfBase64 && (
-                <ReportPreview pdfBase64={results.report.pdfBase64} />
-              )}
+              <Suspense fallback={<div className="viewer-placeholder">Loading...</div>}>
+                {viewerTab === '3d' && (
+                  <ModelViewer stlPath={results?.model?.stl_path || results?.model?.exports?.find(e => e.format === 'stl')?.path} />
+                )}
+                {viewerTab === 'drawing' && results?.drawingSvg && (
+                  <DrawingViewer svgContent={results.drawingSvg} qa={results.qa} />
+                )}
+                {viewerTab === 'pdf' && results?.report?.pdfBase64 && (
+                  <ReportPreview pdfBase64={results.report.pdfBase64} />
+                )}
+              </Suspense>
             </div>
           </div>
 
@@ -211,12 +239,14 @@ export default function App() {
                 {analysisTab === 'dfm' && results.dfm && (
                   <DfmPanel data={results.dfm} />
                 )}
-                {analysisTab === 'tolerance' && results.tolerance && (
-                  <TolerancePanel data={results.tolerance} />
-                )}
-                {analysisTab === 'cost' && results.cost && (
-                  <CostPanel data={results.cost} />
-                )}
+                <Suspense fallback={<div className="viewer-placeholder">Loading...</div>}>
+                  {analysisTab === 'tolerance' && results.tolerance && (
+                    <TolerancePanel data={results.tolerance} />
+                  )}
+                  {analysisTab === 'cost' && results.cost && (
+                    <CostPanel data={results.cost} />
+                  )}
+                </Suspense>
               </div>
             </div>
           )}
@@ -246,6 +276,16 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* STEP Import Modal */}
+      {stepImportData && (
+        <StepImportModal
+          data={stepImportData}
+          onUseConfig={handleUseStepConfig}
+          onSaveConfig={handleSaveStepConfig}
+          onCancel={() => setStepImportData(null)}
+        />
+      )}
     </div>
   );
 }

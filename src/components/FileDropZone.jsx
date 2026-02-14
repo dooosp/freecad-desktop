@@ -24,7 +24,7 @@ export default function FileDropZone({ onFileSelect }) {
       if (name.endsWith('.toml') || name.endsWith('.step') || name.endsWith('.stp')) {
         setSelectedFile(name);
         // For Tauri, we'd use the file path; for web dev, use the name
-        onFileSelect(file.path || name);
+        onFileSelect(file.path || name, file);
       }
     }
   }, [onFileSelect]);
@@ -37,7 +37,7 @@ export default function FileDropZone({ onFileSelect }) {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file.name);
-      onFileSelect(file.path || file.name);
+      onFileSelect(file.path || file.name, file);
     }
   }, [onFileSelect]);
 

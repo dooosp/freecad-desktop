@@ -28,6 +28,7 @@ const { default: drawingRouter } = await import('./routes/drawing.js');
 const { default: toleranceRouter } = await import('./routes/tolerance.js');
 const { default: costRouter } = await import('./routes/cost.js');
 const { default: reportRouter } = await import('./routes/report.js');
+const { default: stepImportRouter } = await import('./routes/step-import.js');
 
 app.use('/api', analyzeRouter);
 app.use('/api', dfmRouter);
@@ -35,6 +36,7 @@ app.use('/api', drawingRouter);
 app.use('/api', toleranceRouter);
 app.use('/api', costRouter);
 app.use('/api', reportRouter);
+app.use('/api', stepImportRouter);
 
 // Serve static artifacts (SVG drawings, STL files, etc.)
 app.use('/artifacts', express.static(join(FREECAD_ROOT, 'output')));
