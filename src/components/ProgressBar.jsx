@@ -11,7 +11,7 @@ const STAGES = [
 export default function ProgressBar({ progress }) {
   if (!progress) return null;
 
-  const { stage, status, completed = [], total = 5 } = progress;
+  const { stage, status, completed = [], cached = [], total = 5 } = progress;
   const percent = status === 'done' ? 100 : (completed.length / total) * 100;
   const isError = status === 'error';
 
@@ -26,14 +26,15 @@ export default function ProgressBar({ progress }) {
       <div className="progress-stages">
         {STAGES.map(s => {
           const isDone = completed.includes(s.key);
+          const isCached = cached.includes(s.key);
           const isActive = stage === s.key && status === 'start';
           const isFailed = stage === s.key && isError;
           return (
             <span
               key={s.key}
-              className={`progress-step${isDone ? ' done' : ''}${isActive ? ' active' : ''}${isFailed ? ' failed' : ''}`}
+              className={`progress-step${isDone ? ' done' : ''}${isCached ? ' cached' : ''}${isActive ? ' active' : ''}${isFailed ? ' failed' : ''}`}
             >
-              {isDone ? '\u2713' : isFailed ? '\u2717' : ''} {s.label}
+              {isDone ? (isCached ? '\u26A1' : '\u2713') : isFailed ? '\u2717' : ''} {s.label}
             </span>
           );
         })}

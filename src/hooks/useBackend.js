@@ -82,6 +82,7 @@ export function useBackend() {
           const decoder = new TextDecoder();
           let buffer = '';
           const completed = [];
+          const cachedStages = new Set();
 
           while (true) {
             const { done, value } = await reader.read();
@@ -109,6 +110,7 @@ export function useBackend() {
                 if (currentEvent === 'stage') {
                   if (data.status === 'done' && data.stage && !completed.includes(data.stage)) {
                     completed.push(data.stage);
+                    if (data.cached) cachedStages.add(data.stage);
                     setError(null);
                   }
                   if (data.status === 'error' && data.error) {
@@ -118,18 +120,19 @@ export function useBackend() {
                     stage: data.stage,
                     status: data.status,
                     completed: [...completed],
+                    cached: [...cachedStages],
                     total: 5,
                     error: data.error || null,
                   });
                 } else if (currentEvent === 'complete') {
                   settled = true;
-                  setProgress({ stage: 'done', status: 'done', completed, total: 5 });
+                  setProgress({ stage: 'done', status: 'done', completed, cached: [...cachedStages], total: 5 });
                   setLoading(false);
                   abortRef.current = null;
                   resolve(data);
                 } else if (currentEvent === 'error') {
                   settled = true;
-                  setProgress({ stage: 'error', status: 'error', completed, total: 5 });
+                  setProgress({ stage: 'error', status: 'error', completed, cached: [...cachedStages], total: 5 });
                   setLoading(false);
                   abortRef.current = null;
                   setError(data.error);
@@ -247,6 +250,13 @@ export function useBackend() {
   }, [call]);
   const deleteReportTemplate = useCallback((name) => call(`/report-templates/${name}`, {}, 'DELETE'), [call]);
 
+  // Cache APIs
+  const getCacheStats = useCallback(() => get('/cache/stats'), [get]);
+  const clearCache = useCallback((stage) => {
+    const qs = stage ? `?stage=${stage}` : '';
+    return call(`/cache${qs}`, {}, 'DELETE');
+  }, [call]);
+
   // Export Pack
   const exportPack = useCallback(async (options) => {
     const res = await call('/export-pack', options);
@@ -278,6 +288,7 @@ export function useBackend() {
     getProfiles, getProfile, saveProfile, deleteProfile, compareProfiles,
     getReportTemplates, getReportTemplate, saveReportTemplate, deleteReportTemplate,
     exportPack,
+    getCacheStats, clearCache,
     setError,
   };
 }

@@ -13,7 +13,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
-  res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
@@ -32,6 +32,7 @@ const { default: stepImportRouter } = await import('./routes/step-import.js');
 const { default: profileRouter } = await import('./routes/profile.js');
 const { default: reportTemplateRouter } = await import('./routes/report-template.js');
 const { default: exportPackRouter } = await import('./routes/export-pack.js');
+const { default: cacheRouter } = await import('./routes/cache.js');
 
 app.use('/api', analyzeRouter);
 app.use('/api', dfmRouter);
@@ -43,6 +44,7 @@ app.use('/api', stepImportRouter);
 app.use('/api/profiles', profileRouter);
 app.use('/api/report-templates', reportTemplateRouter);
 app.use('/api/export-pack', exportPackRouter);
+app.use('/api/cache', cacheRouter);
 
 // Serve static artifacts (SVG drawings, STL files, etc.)
 app.use('/artifacts', express.static(join(FREECAD_ROOT, 'output')));

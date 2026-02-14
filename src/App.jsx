@@ -355,6 +355,8 @@ export default function App() {
             settings={settings}
             onChange={setSettings}
             activeProfile={activeProfileData}
+            getCacheStats={backend.getCacheStats}
+            clearCache={backend.clearCache}
           />
         </aside>
 

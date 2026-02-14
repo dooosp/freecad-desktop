@@ -170,6 +170,7 @@ body {
   transition: color 0.2s;
 }
 .progress-step.done { color: var(--success); }
+.progress-step.done.cached { color: var(--accent); }
 .progress-step.active { color: var(--accent); }
 .progress-step.failed { color: var(--error); }
 
@@ -305,6 +306,17 @@ body {
   outline: none;
   border-color: var(--accent);
 }
+
+/* ===== Cache Info ===== */
+.cache-info { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.cache-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cache-size { font-size: 11px; color: var(--text-muted); }
+.btn-sm { padding: 3px 10px; font-size: 11px; }
 
 /* ===== Content ===== */
 .content {

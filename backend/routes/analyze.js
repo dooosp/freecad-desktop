@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { runQaScorer } from '../lib/qa-runner.js';
 import { postprocessSvg } from '../lib/svg-postprocess.js';
+import { AnalysisCache } from '../lib/analysis-cache.js';
 
 const router = Router();
 
@@ -35,6 +36,7 @@ router.post('/analyze', async (req, res) => {
 
   const fullPath = resolve(freecadRoot, configPath);
   const results = { stages: [], errors: [] };
+  const cache = new AnalysisCache(freecadRoot);
 
   try {
     const config = await loadConfig(fullPath);
@@ -66,10 +68,17 @@ router.post('/analyze', async (req, res) => {
           : 'Config has no shapes/parts. Define geometry before Analyze.';
         throw new Error(errMsg);
       }
-      const createResult = await runScript('create_model.py', config, { timeout: 120_000 });
-      results.model = createResult;
+      const createKey = cache.getCacheKey('create', config, options);
+      const createCached = await cache.checkCache(createKey);
+      if (createCached.hit) {
+        results.model = createCached.entry.result;
+      } else {
+        const createResult = await runScript('create_model.py', config, { timeout: 120_000 });
+        results.model = createResult;
+        await cache.storeCache(createKey, createResult, 'create');
+      }
       results.stages.push('create');
-      send('stage', { stage: 'create', status: 'done' });
+      send('stage', { stage: 'create', status: 'done', cached: createCached.hit });
     } catch (err) {
       results.errors.push({ stage: 'create', error: err.message });
       send('stage', { stage: 'create', status: 'error', error: err.message });
@@ -81,33 +90,47 @@ router.post('/analyze', async (req, res) => {
     if (options.drawing !== false) {
       send('stage', { stage: 'drawing', status: 'start' });
       try {
-        const drawConfig = { ...config };
-        if (!drawConfig.drawing) drawConfig.drawing = {};
-        if (options.dxfExport) drawConfig.drawing.dxf = true;
-        const drawResult = await runScript('generate_drawing.py', drawConfig, { timeout: 120_000 });
-        results.drawing = drawResult;
+        const drawKey = cache.getCacheKey('drawing', config, options);
+        const drawCached = await cache.checkCache(drawKey);
+        if (drawCached.hit) {
+          const drawData = drawCached.entry.result;
+          results.drawing = drawData.drawing || drawData;
+          if (drawData.drawingSvg) results.drawingSvg = drawData.drawingSvg;
+          if (drawData.qa) results.qa = drawData.qa;
+        } else {
+          const drawConfig = { ...config };
+          if (!drawConfig.drawing) drawConfig.drawing = {};
+          if (options.dxfExport) drawConfig.drawing.dxf = true;
+          const drawResult = await runScript('generate_drawing.py', drawConfig, { timeout: 120_000 });
+          results.drawing = drawResult;
 
-        const svgEntry = drawResult.drawing_paths?.find(p => p.format === 'svg');
-        const svgPath = drawResult.svg_path || drawResult.drawing_path || svgEntry?.path;
-        if (svgPath) {
-          try {
-            await postprocessSvg(freecadRoot, svgPath, {
-              profile: drawConfig.drawing_plan?.style?.stroke_profile || 'ks',
-            });
-          } catch { /* Post-process optional */ }
-          try {
-            const { toWSL } = await import(`${freecadRoot}/lib/paths.js`);
-            const wslSvg = toWSL(svgPath);
-            results.drawingSvg = await readFile(wslSvg, 'utf8');
-          } catch { /* SVG read optional */ }
-          try {
-            results.qa = await runQaScorer(freecadRoot, svgPath, {
-              weightsPreset: options.weightsPreset,
-            });
-          } catch { /* QA optional */ }
+          const svgEntry = drawResult.drawing_paths?.find(p => p.format === 'svg');
+          const svgPath = drawResult.svg_path || drawResult.drawing_path || svgEntry?.path;
+          if (svgPath) {
+            try {
+              await postprocessSvg(freecadRoot, svgPath, {
+                profile: drawConfig.drawing_plan?.style?.stroke_profile || 'ks',
+              });
+            } catch { /* Post-process optional */ }
+            try {
+              const { toWSL } = await import(`${freecadRoot}/lib/paths.js`);
+              const wslSvg = toWSL(svgPath);
+              results.drawingSvg = await readFile(wslSvg, 'utf8');
+            } catch { /* SVG read optional */ }
+            try {
+              results.qa = await runQaScorer(freecadRoot, svgPath, {
+                weightsPreset: options.weightsPreset,
+              });
+            } catch { /* QA optional */ }
+          }
+          // Store composite entry with SVG and QA
+          const drawComposite = { drawing: drawResult };
+          if (results.drawingSvg) drawComposite.drawingSvg = results.drawingSvg;
+          if (results.qa) drawComposite.qa = results.qa;
+          await cache.storeCache(drawKey, drawComposite, 'drawing');
         }
         results.stages.push('drawing');
-        send('stage', { stage: 'drawing', status: 'done' });
+        send('stage', { stage: 'drawing', status: 'done', cached: drawCached.hit });
       } catch (err) {
         results.errors.push({ stage: 'drawing', error: err.message });
         send('stage', { stage: 'drawing', status: 'error', error: err.message });
@@ -118,21 +141,25 @@ router.post('/analyze', async (req, res) => {
     if (options.dfm !== false) {
       send('stage', { stage: 'dfm', status: 'start' });
       try {
-        const dfmConfig = { ...config };
-        if (!dfmConfig.manufacturing) dfmConfig.manufacturing = {};
-        if (options.process) dfmConfig.manufacturing.process = options.process;
-        if (options.material) dfmConfig.manufacturing.material = options.material;
-        if (!dfmConfig.manufacturing.process) dfmConfig.manufacturing.process = 'machining';
+        const dfmCacheOpts = { ...options, shopProfile: shopProfile || undefined };
+        const dfmKey = cache.getCacheKey('dfm', config, dfmCacheOpts);
+        const dfmCached = await cache.checkCache(dfmKey);
+        if (dfmCached.hit) {
+          results.dfm = dfmCached.entry.result;
+        } else {
+          const dfmConfig = { ...config };
+          if (!dfmConfig.manufacturing) dfmConfig.manufacturing = {};
+          if (options.process) dfmConfig.manufacturing.process = options.process;
+          if (options.material) dfmConfig.manufacturing.material = options.material;
+          if (!dfmConfig.manufacturing.process) dfmConfig.manufacturing.process = 'machining';
+          if (shopProfile) dfmConfig.shop_profile = shopProfile;
 
-        // Inject shop profile if available
-        if (shopProfile) {
-          dfmConfig.shop_profile = shopProfile;
+          const dfmResult = await runScript('dfm_checker.py', dfmConfig, { timeout: 60_000 });
+          results.dfm = dfmResult;
+          await cache.storeCache(dfmKey, dfmResult, 'dfm');
         }
-
-        const dfmResult = await runScript('dfm_checker.py', dfmConfig, { timeout: 60_000 });
-        results.dfm = dfmResult;
         results.stages.push('dfm');
-        send('stage', { stage: 'dfm', status: 'done' });
+        send('stage', { stage: 'dfm', status: 'done', cached: dfmCached.hit });
       } catch (err) {
         results.errors.push({ stage: 'dfm', error: err.message });
         send('stage', { stage: 'dfm', status: 'error', error: err.message });
@@ -143,21 +170,28 @@ router.post('/analyze', async (req, res) => {
     if (options.tolerance !== false && hasAssembly && hasAssemblyParts) {
       send('stage', { stage: 'tolerance', status: 'start' });
       try {
-        const tolConfig = {
-          ...config,
-          tolerance: { ...(config.tolerance || {}) },
-        };
-        if (typeof options.monteCarlo === 'boolean') {
-          tolConfig.tolerance.monte_carlo = options.monteCarlo;
+        const tolKey = cache.getCacheKey('tolerance', config, options);
+        const tolCached = await cache.checkCache(tolKey);
+        if (tolCached.hit) {
+          results.tolerance = tolCached.entry.result;
+        } else {
+          const tolConfig = {
+            ...config,
+            tolerance: { ...(config.tolerance || {}) },
+          };
+          if (typeof options.monteCarlo === 'boolean') {
+            tolConfig.tolerance.monte_carlo = options.monteCarlo;
+          }
+          const parsedSamples = Number(options.mcSamples);
+          if (Number.isFinite(parsedSamples) && parsedSamples > 0) {
+            tolConfig.tolerance.mc_samples = Math.floor(parsedSamples);
+          }
+          const tolResult = await runScript('tolerance_analysis.py', tolConfig, { timeout: 60_000 });
+          results.tolerance = tolResult;
+          await cache.storeCache(tolKey, tolResult, 'tolerance');
         }
-        const parsedSamples = Number(options.mcSamples);
-        if (Number.isFinite(parsedSamples) && parsedSamples > 0) {
-          tolConfig.tolerance.mc_samples = Math.floor(parsedSamples);
-        }
-        const tolResult = await runScript('tolerance_analysis.py', tolConfig, { timeout: 60_000 });
-        results.tolerance = tolResult;
         results.stages.push('tolerance');
-        send('stage', { stage: 'tolerance', status: 'done' });
+        send('stage', { stage: 'tolerance', status: 'done', cached: tolCached.hit });
       } catch (err) {
         results.errors.push({ stage: 'tolerance', error: err.message });
         send('stage', { stage: 'tolerance', status: 'error', error: err.message });
@@ -168,23 +202,31 @@ router.post('/analyze', async (req, res) => {
     if (options.cost !== false) {
       send('stage', { stage: 'cost', status: 'start' });
       try {
-        const costInput = {
-          ...config,
-          dfm_result: results.dfm || null,
-          material: options.material || config.manufacturing?.material || 'SS304',
-          process: options.process || config.manufacturing?.process || 'machining',
-          batch_size: options.batch || 1,
+        const costCacheOpts = {
+          ...options,
+          shopProfile: shopProfile || undefined,
+          dfm_score: results.dfm?.score ?? null,
         };
+        const costKey = cache.getCacheKey('cost', config, costCacheOpts);
+        const costCached = await cache.checkCache(costKey);
+        if (costCached.hit) {
+          results.cost = costCached.entry.result;
+        } else {
+          const costInput = {
+            ...config,
+            dfm_result: results.dfm || null,
+            material: options.material || config.manufacturing?.material || 'SS304',
+            process: options.process || config.manufacturing?.process || 'machining',
+            batch_size: options.batch || 1,
+          };
+          if (shopProfile) costInput.shop_profile = shopProfile;
 
-        // Inject shop profile if available
-        if (shopProfile) {
-          costInput.shop_profile = shopProfile;
+          const costResult = await runScript('cost_estimator.py', costInput, { timeout: 60_000 });
+          results.cost = costResult;
+          await cache.storeCache(costKey, costResult, 'cost');
         }
-
-        const costResult = await runScript('cost_estimator.py', costInput, { timeout: 60_000 });
-        results.cost = costResult;
         results.stages.push('cost');
-        send('stage', { stage: 'cost', status: 'done' });
+        send('stage', { stage: 'cost', status: 'done', cached: costCached.hit });
       } catch (err) {
         results.errors.push({ stage: 'cost', error: err.message });
         send('stage', { stage: 'cost', status: 'error', error: err.message });

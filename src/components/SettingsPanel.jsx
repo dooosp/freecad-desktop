@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const PROCESSES = [
   { value: 'machining', label: 'Machining' },
@@ -24,7 +24,30 @@ const STANDARDS = [
   { value: 'ANSI', label: 'ANSI' },
 ];
 
-export default function SettingsPanel({ settings, onChange, activeProfile }) {
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export default function SettingsPanel({ settings, onChange, activeProfile, getCacheStats, clearCache }) {
+  const [cacheStats, setCacheStats] = useState(null);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    if (getCacheStats) getCacheStats().then(s => s && setCacheStats(s));
+  }, [getCacheStats]);
+
+  const handleClearCache = async () => {
+    if (!clearCache) return;
+    setClearing(true);
+    await clearCache();
+    const s = getCacheStats ? await getCacheStats() : null;
+    if (s) setCacheStats(s);
+    setClearing(false);
+  };
+
   const update = (key, value) => {
     onChange({ ...settings, [key]: value });
   };
@@ -103,6 +126,24 @@ export default function SettingsPanel({ settings, onChange, activeProfile }) {
           DXF Export
         </label>
       </div>
+
+      {cacheStats && (
+        <div className="setting-group cache-info">
+          <label>Cache</label>
+          <div className="cache-row">
+            <span className="cache-size">
+              {cacheStats.entries} entries ({formatBytes(cacheStats.totalSizeBytes)})
+            </span>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={handleClearCache}
+              disabled={clearing || cacheStats.entries === 0}
+            >
+              {clearing ? 'Clearing...' : 'Clear'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
