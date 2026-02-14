@@ -87,11 +87,18 @@ export function useBackend() {
               if (line.startsWith('event: ')) {
                 currentEvent = line.slice(7).trim();
               } else if (line.startsWith('data: ') && currentEvent) {
-                const data = JSON.parse(line.slice(6));
+                let data;
+                try {
+                  data = JSON.parse(line.slice(6));
+                } catch {
+                  currentEvent = null;
+                  continue;
+                }
 
                 if (currentEvent === 'stage') {
                   if (data.status === 'done' && data.stage && !completed.includes(data.stage)) {
                     completed.push(data.stage);
+                    setError(null);
                   }
                   if (data.status === 'error' && data.error) {
                     setError(`[${data.stage}] ${data.error}`);
