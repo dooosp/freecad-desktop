@@ -159,6 +159,7 @@ router.post('/report', async (req, res) => {
 
     const reportInput = {
       ...config,
+      standard: (analysisResults && analysisResults.standard) || config.standard || options?.standard || 'KS',
       ...(shopProfile ? { shop_profile: shopProfile } : {}),
       export: { ...config.export, directory: outputDir },
       _report_options: {

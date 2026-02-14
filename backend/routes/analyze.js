@@ -40,6 +40,7 @@ router.post('/analyze', async (req, res) => {
 
   try {
     const config = await loadConfig(fullPath);
+    config.standard = options.standard || 'KS';
     const hasShapes = Array.isArray(config.shapes) && config.shapes.length > 0;
     const hasAssemblyParts = Array.isArray(config.parts) && config.parts.length > 0;
     const hasAssembly = Boolean(config.assembly);

@@ -121,6 +121,7 @@ export default function App() {
         process: settings.process,
         material: settings.material,
         batch: settings.batch,
+        standard: settings.standard,
         dxfExport: settings.dxfExport || false,
         profileName: activeProfile !== '_default' ? activeProfile : undefined,
       });
