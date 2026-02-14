@@ -17,6 +17,7 @@ router.post('/dfm', async (req, res) => {
 
   try {
     const config = await loadConfig(resolve(freecadRoot, configPath));
+    config.standard = req.body.standard || 'KS';
     if (!config.manufacturing) config.manufacturing = {};
     config.manufacturing.process = mfgProcess;
 

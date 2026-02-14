@@ -21,6 +21,7 @@ router.post('/drawing', async (req, res) => {
   try {
     const fullConfigPath = resolve(freecadRoot, configPath);
     let config = await loadConfig(fullConfigPath);
+    config.standard = req.body.standard || 'KS';
 
     // Apply preset override if specified
     if (preset) {

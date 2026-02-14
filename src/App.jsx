@@ -140,7 +140,7 @@ export default function App() {
     try {
       const profileArg = activeProfile !== '_default' ? activeProfile : undefined;
       if (stage === 'dfm') {
-        const data = await backend.runDfm(configPath, settings.process, profileArg);
+        const data = await backend.runDfm(configPath, settings.process, profileArg, settings.standard);
         setResults(prev => ({ ...prev, dfm: data }));
       } else if (stage === 'cost') {
         const data = await backend.runCost(configPath, {
@@ -149,10 +149,11 @@ export default function App() {
           batchSize: settings.batch,
           dfmResult: results.dfm || null,
           profileName: profileArg,
+          standard: settings.standard,
         });
         setResults(prev => ({ ...prev, cost: data }));
       } else if (stage === 'drawing') {
-        const data = await backend.runDrawing(configPath);
+        const data = await backend.runDrawing(configPath, undefined, settings.standard);
         setResults(prev => ({
           ...prev,
           drawing: data,
@@ -160,7 +161,7 @@ export default function App() {
           qa: data.qa || prev.qa,
         }));
       } else if (stage === 'tolerance') {
-        const data = await backend.runTolerance(configPath);
+        const data = await backend.runTolerance(configPath, settings.standard);
         setResults(prev => ({ ...prev, tolerance: data }));
       }
     } catch {

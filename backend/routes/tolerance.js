@@ -17,6 +17,7 @@ router.post('/tolerance', async (req, res) => {
 
   try {
     const config = await loadConfig(resolve(freecadRoot, configPath));
+    config.standard = req.body.standard || 'KS';
     const hasAssembly = Boolean(config.assembly);
     const hasParts = Array.isArray(config.parts) && config.parts.length > 0;
     if (!hasAssembly || !hasParts) {

@@ -173,11 +173,11 @@ export function useBackend() {
 
   const inspect = useCallback((body) => call('/inspect', body), [call]);
   const create = useCallback((body) => call('/create', body), [call]);
-  const runDfm = useCallback((configPath, process, profileName) => {
-    return call('/dfm', { configPath, process, profileName: profileName || undefined });
+  const runDfm = useCallback((configPath, process, profileName, standard) => {
+    return call('/dfm', { configPath, process, profileName: profileName || undefined, standard });
   }, [call]);
-  const runDrawing = useCallback((configPath, preset) => call('/drawing', { configPath, preset }), [call]);
-  const runTolerance = useCallback((configPath) => call('/tolerance', { configPath }), [call]);
+  const runDrawing = useCallback((configPath, preset, standard) => call('/drawing', { configPath, preset, standard }), [call]);
+  const runTolerance = useCallback((configPath, standard) => call('/tolerance', { configPath, standard }), [call]);
   const runCost = useCallback((configPath, opts) => {
     return call('/cost', { configPath, ...opts });
   }, [call]);

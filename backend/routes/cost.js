@@ -30,6 +30,7 @@ router.post('/cost', async (req, res) => {
       material,
       process: mfgProcess,
       batch_size: batchSize,
+      standard: req.body.standard || 'KS',
     };
 
     // Load and inject shop profile if specified
