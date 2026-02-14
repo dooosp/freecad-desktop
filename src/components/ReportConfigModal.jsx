@@ -53,7 +53,8 @@ export default function ReportConfigModal({ templates, onGenerate, onCancel, bac
     setOptions(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    if (loading) return;
     setLoading(true);
     const config = {
       templateName: selectedTemplate !== '_default' ? selectedTemplate : undefined,
@@ -61,7 +62,11 @@ export default function ReportConfigModal({ templates, onGenerate, onCancel, bac
       sections,
       options,
     };
-    onGenerate(config);
+    try {
+      await onGenerate(config);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
