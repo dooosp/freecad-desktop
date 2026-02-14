@@ -21,9 +21,17 @@ function pick(obj, keys) {
   return out;
 }
 
+function stableStringify(obj) {
+  if (obj === null || obj === undefined) return JSON.stringify(obj);
+  if (typeof obj !== 'object') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(stableStringify).join(',') + ']';
+  const keys = Object.keys(obj).sort();
+  return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
+}
+
 function hash(data) {
   return createHash('sha256')
-    .update(JSON.stringify(data, Object.keys(data).sort()))
+    .update(stableStringify(data))
     .digest('hex')
     .slice(0, 16);
 }
@@ -46,6 +54,12 @@ export class AnalysisCache {
 
     // Merge runtime options into a flat object for hashing
     const merged = { ...config };
+    // Merge material/process into manufacturing (used by dfm stage extractor)
+    if (options.process || options.material) {
+      merged.manufacturing = { ...(merged.manufacturing || {}) };
+      if (options.process) merged.manufacturing.process = options.process;
+      if (options.material) merged.manufacturing.material = options.material;
+    }
     if (options.process) merged.process = options.process;
     if (options.material) merged.material = options.material;
     if (options.batch) merged.batch_size = options.batch;
