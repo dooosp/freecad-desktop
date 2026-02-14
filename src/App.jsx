@@ -73,7 +73,7 @@ export default function App() {
           <h1 className="logo">FreeCAD Studio</h1>
         </div>
         <div className="header-actions">
-          {backend.loading && (
+          {backend.loading && backend.progress && backend.progress.status !== 'done' && (
             <button className="btn btn-secondary" onClick={backend.cancelAnalyze}>
               Cancel
             </button>
@@ -103,10 +103,7 @@ export default function App() {
       {/* Error */}
       {backend.error && (
         <div className="error-bar">
-          <span className="error-message">
-            {backend.progress?.stage && `[${backend.progress.stage}] `}
-            {backend.error}
-          </span>
+          <span className="error-message">{backend.error}</span>
           <button className="error-dismiss" onClick={() => backend.setError(null)}>
             Dismiss
           </button>

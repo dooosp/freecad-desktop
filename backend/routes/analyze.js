@@ -86,9 +86,10 @@ router.post('/analyze', async (req, res) => {
       send('stage', { stage: 'dfm', status: 'start' });
       try {
         const dfmConfig = { ...config };
-        if (!dfmConfig.manufacturing) {
-          dfmConfig.manufacturing = { process: options.process || 'machining' };
-        }
+        if (!dfmConfig.manufacturing) dfmConfig.manufacturing = {};
+        if (options.process) dfmConfig.manufacturing.process = options.process;
+        if (options.material) dfmConfig.manufacturing.material = options.material;
+        if (!dfmConfig.manufacturing.process) dfmConfig.manufacturing.process = 'machining';
         const dfmResult = await runScript('dfm_checker.py', dfmConfig, { timeout: 60_000 });
         results.dfm = dfmResult;
         results.stages.push('dfm');

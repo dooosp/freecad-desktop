@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
-import { join, parse, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 function isWindowsAbsolutePath(path) {
   return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\');
@@ -10,14 +9,6 @@ function toCanonicalWslPath(path, toWSL) {
   if (path.startsWith('/')) return resolve(path);
   if (isWindowsAbsolutePath(path)) return toWSL(path);
   return resolve(process.cwd(), path.replaceAll('\\', '/'));
-}
-
-function getQaJsonPath(svgWslPath) {
-  const parsed = parse(svgWslPath);
-  const qaFileName = parsed.base.endsWith('_drawing.svg')
-    ? parsed.base.replace(/_drawing\.svg$/i, '_qa.json')
-    : `${parsed.name}_qa.json`;
-  return join(parsed.dir, qaFileName);
 }
 
 /**
@@ -35,11 +26,9 @@ export async function runQaScorer(freecadRoot, svgPath) {
   const scriptWin = toWindows(join(freecadRoot, 'scripts', 'qa_scorer.py'));
   const svgWslPath = toCanonicalWslPath(svgPath, toWSL);
   const svgWin = toWindows(svgWslPath);
-  const qaJsonPath = getQaJsonPath(svgWslPath);
-  const qaJsonWin = toWindows(qaJsonPath);
 
-  await new Promise((resolve, reject) => {
-    const proc = spawn(PYTHON_EXE_WSL, [scriptWin, svgWin, '--json', qaJsonWin], {
+  const stdout = await new Promise((resolve, reject) => {
+    const proc = spawn(PYTHON_EXE_WSL, [scriptWin, svgWin], {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 60_000,
     });
@@ -52,11 +41,18 @@ export async function runQaScorer(freecadRoot, svgPath) {
         const tail = `${stderr.slice(-300)} ${stdout.slice(-300)}`.trim();
         return reject(new Error(`qa_scorer exited ${code}: ${tail}`));
       }
-      resolve();
+      resolve(stdout);
     });
     proc.on('error', reject);
   });
 
-  const qaJson = await readFile(qaJsonPath, 'utf8');
-  return JSON.parse(qaJson);
+  const scoreMatch = stdout.match(/QA Score:\s*(\d+)\/100/i);
+  if (!scoreMatch) {
+    throw new Error(`qa_scorer output did not include score: ${stdout.slice(-300)}`);
+  }
+
+  return {
+    score: Number(scoreMatch[1]),
+    file: basename(svgWslPath),
+  };
 }

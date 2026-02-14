@@ -47,6 +47,7 @@ export function useBackend() {
       setLoading(true);
       setError(null);
       setProgress({ stage: null, status: 'starting', completed: [], total: 5 });
+      let settled = false;
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -61,6 +62,9 @@ export function useBackend() {
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             throw new Error(data.error || `HTTP ${res.status}`);
+          }
+          if (!res.body) {
+            throw new Error('Analyze stream body is empty');
           }
 
           const reader = res.body.getReader();
@@ -86,8 +90,11 @@ export function useBackend() {
                 const data = JSON.parse(line.slice(6));
 
                 if (currentEvent === 'stage') {
-                  if (data.status === 'done') {
+                  if (data.status === 'done' && data.stage && !completed.includes(data.stage)) {
                     completed.push(data.stage);
+                  }
+                  if (data.status === 'error' && data.error) {
+                    setError(`[${data.stage}] ${data.error}`);
                   }
                   setProgress({
                     stage: data.stage,
@@ -97,12 +104,16 @@ export function useBackend() {
                     error: data.error || null,
                   });
                 } else if (currentEvent === 'complete') {
+                  settled = true;
                   setProgress({ stage: 'done', status: 'done', completed, total: 5 });
                   setLoading(false);
+                  abortRef.current = null;
                   resolve(data);
                 } else if (currentEvent === 'error') {
+                  settled = true;
                   setProgress({ stage: 'error', status: 'error', completed, total: 5 });
                   setLoading(false);
+                  abortRef.current = null;
                   setError(data.error);
                   reject(new Error(data.error));
                 }
@@ -112,9 +123,19 @@ export function useBackend() {
               }
             }
           }
+
+          if (!settled) {
+            throw new Error('Analyze stream ended unexpectedly');
+          }
         })
         .catch((err) => {
-          if (err.name === 'AbortError') return;
+          abortRef.current = null;
+          if (err.name === 'AbortError') {
+            setLoading(false);
+            setProgress(null);
+            reject(err);
+            return;
+          }
           setError(err.message);
           setLoading(false);
           setProgress(null);
