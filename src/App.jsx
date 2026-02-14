@@ -5,6 +5,10 @@ import DfmPanel from './components/DfmPanel.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import ProgressBar from './components/ProgressBar.jsx';
 import StepImportModal from './components/StepImportModal.jsx';
+import ShopProfilePanel from './components/ShopProfilePanel.jsx';
+import ShopProfileModal from './components/ShopProfileModal.jsx';
+import ReportConfigModal from './components/ReportConfigModal.jsx';
+import ExportPackModal from './components/ExportPackModal.jsx';
 
 // Lazy: Three.js (~600KB), Chart.js (~200KB) 컴포넌트
 const ModelViewer = lazy(() => import('./components/ModelViewer.jsx'));
@@ -28,9 +32,34 @@ export default function App() {
     batch: 100,
   });
 
+  // Profile state
+  const [profiles, setProfiles] = useState([]);
+  const [activeProfile, setActiveProfile] = useState('_default');
+  const [activeProfileData, setActiveProfileData] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(null);
+
+  // Report config state
+  const [showReportModal, setShowReportModal] = useState(false);
+
+  // Export pack state
+  const [showExportModal, setShowExportModal] = useState(false);
+
   useEffect(() => {
     backend.getExamples().then(ex => ex && setExamples(ex));
+    backend.getProfiles().then(profs => profs && setProfiles(profs)).catch(() => setProfiles([]));
   }, []);
+
+  // Load full profile data when activeProfile changes
+  useEffect(() => {
+    if (activeProfile && activeProfile !== '_default') {
+      backend.getProfile(activeProfile)
+        .then(data => setActiveProfileData(data))
+        .catch(() => setActiveProfileData(null));
+    } else {
+      setActiveProfileData(null);
+    }
+  }, [activeProfile]);
 
   const handleFileSelect = useCallback(async (path, rawFile) => {
     const lower = path.toLowerCase();
@@ -61,21 +90,31 @@ export default function App() {
         process: settings.process,
         material: settings.material,
         batch: settings.batch,
+        profileName: activeProfile !== '_default' ? activeProfile : undefined,
       });
       setResults(data);
     } catch {
       // error is already set in backend.error
     }
-  }, [configPath, settings, backend]);
+  }, [configPath, settings, activeProfile, backend]);
 
-  const handleGenerateReport = useCallback(async () => {
+  const handleOpenReportConfig = useCallback(() => {
+    setShowReportModal(true);
+  }, []);
+
+  const handleGenerateReportWithTemplate = useCallback(async (config) => {
     if (!configPath) return;
     try {
       const data = await backend.generateReport(configPath, {
         analysisResults: results,
+        templateName: config.templateName,
+        metadata: config.metadata,
+        sections: config.sections,
+        options: config.options,
       });
       setResults(prev => ({ ...prev, report: data }));
       setViewerTab('pdf');
+      setShowReportModal(false);
     } catch {
       // error handled by backend
     }
@@ -89,6 +128,87 @@ export default function App() {
 
   const handleSaveStepConfig = useCallback(async (cfgPath, tomlString) => {
     await backend.saveStepConfig(cfgPath, tomlString);
+  }, [backend]);
+
+  // Profile handlers
+  const handleProfileChange = useCallback((name) => {
+    setActiveProfile(name);
+  }, []);
+
+  const handleEditProfile = useCallback(async () => {
+    try {
+      const full = await backend.getProfile(activeProfile);
+      setEditingProfile(full);
+      setShowProfileModal(true);
+    } catch (err) {
+      backend.setError('Failed to load profile');
+    }
+  }, [activeProfile, backend]);
+
+  const handleNewProfile = useCallback(() => {
+    setEditingProfile({
+      _isNew: true,
+      name: '',
+      description: '',
+      process_capabilities: {},
+      material_rates: {},
+      tolerance_capabilities: {
+        min_it_grade: 7,
+        max_it_grade: 12,
+        surface_finish_range: { min: 0.8, max: 6.3 },
+      },
+      inspection: {
+        cost_per_tolerance_pair: 5000,
+        cmm_available: true,
+      },
+      batch_discounts: [
+        { min_qty: 1, max_qty: 10, discount: 0 },
+        { min_qty: 11, max_qty: 100, discount: 0.1 },
+        { min_qty: 101, max_qty: 500, discount: 0.2 },
+        { min_qty: 501, max_qty: null, discount: 0.3 },
+      ],
+    });
+    setShowProfileModal(true);
+  }, []);
+
+  const handleSaveProfile = useCallback(async (profile) => {
+    try {
+      await backend.saveProfile(profile);
+      const updated = await backend.getProfiles();
+      setProfiles(updated || []);
+      setShowProfileModal(false);
+    } catch (err) {
+      backend.setError('Failed to save profile');
+    }
+  }, [backend]);
+
+  const handleDeleteProfile = useCallback(async (name) => {
+    try {
+      await backend.deleteProfile(name);
+      if (activeProfile === name) {
+        setActiveProfile('_default');
+      }
+      const updated = await backend.getProfiles();
+      setProfiles(updated || []);
+      setShowProfileModal(false);
+    } catch (err) {
+      backend.setError('Failed to delete profile');
+    }
+  }, [activeProfile, backend]);
+
+  // Export pack handlers
+  const handleOpenExportPack = useCallback(() => {
+    if (!configPath) return;
+    setShowExportModal(true);
+  }, [configPath]);
+
+  const handleExportPack = useCallback(async (options) => {
+    try {
+      await backend.exportPack(options);
+      setShowExportModal(false);
+    } catch (err) {
+      backend.setError('Failed to generate export pack');
+    }
   }, [backend]);
 
   return (
@@ -114,9 +234,16 @@ export default function App() {
           <button
             className="btn btn-secondary"
             disabled={!results || backend.loading}
-            onClick={handleGenerateReport}
+            onClick={handleOpenReportConfig}
           >
             Report
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={!configPath || backend.loading}
+            onClick={handleOpenExportPack}
+          >
+            Export Pack
           </button>
         </div>
       </header>
@@ -140,6 +267,15 @@ export default function App() {
       <div className="main-layout">
         {/* Left Sidebar */}
         <aside className="sidebar">
+          <ShopProfilePanel
+            profiles={profiles}
+            activeProfile={activeProfile}
+            activeProfileData={activeProfileData}
+            onProfileChange={handleProfileChange}
+            onEditProfile={handleEditProfile}
+            onNewProfile={handleNewProfile}
+          />
+
           <div className="sidebar-section">
             <h3>Files</h3>
             <FileDropZone onFileSelect={handleFileSelect} />
@@ -159,7 +295,11 @@ export default function App() {
             )}
           </div>
 
-          <SettingsPanel settings={settings} onChange={setSettings} />
+          <SettingsPanel
+            settings={settings}
+            onChange={setSettings}
+            activeProfile={activeProfileData}
+          />
         </aside>
 
         {/* Center Content */}
@@ -198,7 +338,10 @@ export default function App() {
                   <DrawingViewer svgContent={results.drawingSvg} qa={results.qa} />
                 )}
                 {viewerTab === 'pdf' && results?.report?.pdfBase64 && (
-                  <ReportPreview pdfBase64={results.report.pdfBase64} />
+                  <ReportPreview
+                    pdfBase64={results.report.pdfBase64}
+                    onConfigure={handleOpenReportConfig}
+                  />
                 )}
               </Suspense>
             </div>
@@ -284,6 +427,34 @@ export default function App() {
           onUseConfig={handleUseStepConfig}
           onSaveConfig={handleSaveStepConfig}
           onCancel={() => setStepImportData(null)}
+        />
+      )}
+
+      {/* Shop Profile Modal */}
+      {showProfileModal && (
+        <ShopProfileModal
+          profile={editingProfile}
+          onSave={handleSaveProfile}
+          onDelete={handleDeleteProfile}
+          onCancel={() => setShowProfileModal(false)}
+        />
+      )}
+
+      {/* Report Config Modal */}
+      {showReportModal && (
+        <ReportConfigModal
+          backend={backend}
+          onGenerate={handleGenerateReportWithTemplate}
+          onCancel={() => setShowReportModal(false)}
+        />
+      )}
+
+      {/* Export Pack Modal */}
+      {showExportModal && (
+        <ExportPackModal
+          configPath={configPath}
+          onExport={handleExportPack}
+          onCancel={() => setShowExportModal(false)}
         />
       )}
     </div>

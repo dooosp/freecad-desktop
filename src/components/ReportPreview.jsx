@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function ReportPreview({ pdfBase64 }) {
+export default function ReportPreview({ pdfBase64, onConfigure }) {
   const [page, setPage] = useState(1);
 
   if (!pdfBase64) {
@@ -16,6 +16,11 @@ export default function ReportPreview({ pdfBase64 }) {
   return (
     <div className="report-preview">
       <div className="viewer-toolbar">
+        {onConfigure && (
+          <button className="btn btn-secondary" onClick={onConfigure}>
+            Configure
+          </button>
+        )}
         <a
           className="btn btn-secondary"
           href={pdfUrl}

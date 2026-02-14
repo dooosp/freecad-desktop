@@ -24,10 +24,23 @@ const STANDARDS = [
   { value: 'ANSI', label: 'ANSI' },
 ];
 
-export default function SettingsPanel({ settings, onChange }) {
+export default function SettingsPanel({ settings, onChange, activeProfile }) {
   const update = (key, value) => {
     onChange({ ...settings, [key]: value });
   };
+
+  // Filter processes and materials based on active profile
+  const availableProcesses = PROCESSES.filter(p => {
+    if (!activeProfile) return true;
+    const cap = activeProfile.process_capabilities?.[p.value];
+    return !cap || cap.available !== false;
+  });
+
+  const availableMaterials = MATERIALS.filter(m => {
+    if (!activeProfile) return true;
+    const rate = activeProfile.material_rates?.[m.value];
+    return !rate || rate.available !== false;
+  });
 
   return (
     <div className="sidebar-section settings-panel">
@@ -39,7 +52,7 @@ export default function SettingsPanel({ settings, onChange }) {
           value={settings.process}
           onChange={(e) => update('process', e.target.value)}
         >
-          {PROCESSES.map(p => (
+          {availableProcesses.map(p => (
             <option key={p.value} value={p.value}>{p.label}</option>
           ))}
         </select>
@@ -51,7 +64,7 @@ export default function SettingsPanel({ settings, onChange }) {
           value={settings.material}
           onChange={(e) => update('material', e.target.value)}
         >
-          {MATERIALS.map(m => (
+          {availableMaterials.map(m => (
             <option key={m.value} value={m.value}>{m.label}</option>
           ))}
         </select>

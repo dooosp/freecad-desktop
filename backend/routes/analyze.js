@@ -18,7 +18,7 @@ router.post('/analyze', async (req, res) => {
   const { runScript } = await import(`${freecadRoot}/lib/runner.js`);
   const { loadConfig } = await import(`${freecadRoot}/lib/config-loader.js`);
 
-  const { configPath, options = {} } = req.body;
+  const { configPath, options = {}, profileName = null } = req.body;
   if (!configPath) return res.status(400).json({ error: 'configPath required' });
 
   // Set up SSE headers
@@ -42,6 +42,20 @@ router.post('/analyze', async (req, res) => {
     const hasAssemblyParts = Array.isArray(config.parts) && config.parts.length > 0;
     const hasAssembly = Boolean(config.assembly);
     const canCreateModel = hasShapes || hasAssemblyParts;
+
+    // Load shop profile if specified
+    let shopProfile = null;
+    if (profileName) {
+      try {
+        const { readFile } = await import('node:fs/promises');
+        const { join } = await import('node:path');
+        const profilePath = join(freecadRoot, 'configs', 'profiles', `${profileName}.json`);
+        const profileContent = await readFile(profilePath, 'utf8');
+        shopProfile = JSON.parse(profileContent);
+      } catch {
+        // Profile load failed, continue without it
+      }
+    }
 
     // Stage 1: Create model
     send('stage', { stage: 'create', status: 'start' });
@@ -108,6 +122,12 @@ router.post('/analyze', async (req, res) => {
         if (options.process) dfmConfig.manufacturing.process = options.process;
         if (options.material) dfmConfig.manufacturing.material = options.material;
         if (!dfmConfig.manufacturing.process) dfmConfig.manufacturing.process = 'machining';
+
+        // Inject shop profile if available
+        if (shopProfile) {
+          dfmConfig.shop_profile = shopProfile;
+        }
+
         const dfmResult = await runScript('dfm_checker.py', dfmConfig, { timeout: 60_000 });
         results.dfm = dfmResult;
         results.stages.push('dfm');
@@ -154,6 +174,12 @@ router.post('/analyze', async (req, res) => {
           process: options.process || config.manufacturing?.process || 'machining',
           batch_size: options.batch || 1,
         };
+
+        // Inject shop profile if available
+        if (shopProfile) {
+          costInput.shop_profile = shopProfile;
+        }
+
         const costResult = await runScript('cost_estimator.py', costInput, { timeout: 60_000 });
         results.cost = costResult;
         results.stages.push('cost');

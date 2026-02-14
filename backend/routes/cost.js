@@ -18,6 +18,7 @@ router.post('/cost', async (req, res) => {
     material = 'SS304',
     batchSize = 1,
     dfmResult = null,
+    profileName = null,
   } = req.body;
   if (!configPath) return res.status(400).json({ error: 'configPath required' });
 
@@ -30,6 +31,19 @@ router.post('/cost', async (req, res) => {
       process: mfgProcess,
       batch_size: batchSize,
     };
+
+    // Load and inject shop profile if specified
+    if (profileName) {
+      try {
+        const { readFile } = await import('node:fs/promises');
+        const { join } = await import('node:path');
+        const profilePath = join(freecadRoot, 'configs', 'profiles', `${profileName}.json`);
+        const profileContent = await readFile(profilePath, 'utf8');
+        costInput.shop_profile = JSON.parse(profileContent);
+      } catch {
+        // Profile load failed, continue without it
+      }
+    }
 
     const result = await runScript('cost_estimator.py', costInput, { timeout: 60_000 });
     res.json(result);

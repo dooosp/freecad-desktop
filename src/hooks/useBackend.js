@@ -8,15 +8,18 @@ export function useBackend() {
   const [error, setError] = useState(null);
   const abortRef = useRef(null);
 
-  const call = useCallback(async (endpoint, body = {}) => {
+  const call = useCallback(async (endpoint, body = {}, method = 'POST') => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
+      const options = {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      };
+      if (method !== 'GET' && method !== 'DELETE') {
+        options.body = JSON.stringify(body);
+      }
+      const res = await fetch(`${API_BASE}${endpoint}`, options);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       return data;
@@ -55,7 +58,13 @@ export function useBackend() {
       fetch(`${API_BASE}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ configPath, options }),
+        body: JSON.stringify({
+          configPath,
+          options: {
+            ...options,
+            profileName: options.profileName || undefined,
+          }
+        }),
         signal: controller.signal,
       })
         .then(async (res) => {
@@ -163,7 +172,16 @@ export function useBackend() {
   const runDrawing = useCallback((configPath, preset) => call('/drawing', { configPath, preset }), [call]);
   const runTolerance = useCallback((configPath) => call('/tolerance', { configPath }), [call]);
   const runCost = useCallback((configPath, opts) => call('/cost', { configPath, ...opts }), [call]);
-  const generateReport = useCallback((configPath, opts) => call('/report', { configPath, ...opts }), [call]);
+  const generateReport = useCallback((configPath, opts) => {
+    return call('/report', {
+      configPath,
+      analysisResults: opts.analysisResults,
+      templateName: opts.templateName || undefined,
+      metadata: opts.metadata || undefined,
+      sections: opts.sections || undefined,
+      options: opts.options || undefined,
+    });
+  }, [call]);
   const getExamples = useCallback(() => get('/examples'), [get]);
 
   const importStep = useCallback(async (fileOrPath) => {
@@ -199,6 +217,47 @@ export function useBackend() {
     return call('/step/save-config', { configPath, tomlString });
   }, [call]);
 
+  // Profile APIs
+  const getProfiles = useCallback(() => get('/profiles'), [get]);
+  const getProfile = useCallback((name) => get(`/profiles/${name}`), [get]);
+  const saveProfile = useCallback((profile) => {
+    const isNew = profile._isNew;
+    delete profile._isNew; // Remove flag before sending
+    return call(`/profiles${isNew ? '' : '/' + profile.name}`, profile, isNew ? 'POST' : 'PUT');
+  }, [call]);
+  const deleteProfile = useCallback((name) => call(`/profiles/${name}`, {}, 'DELETE'), [call]);
+
+  // Report Template APIs
+  const getReportTemplates = useCallback(() => get('/report-templates'), [get]);
+  const getReportTemplate = useCallback((name) => get(`/report-templates/${name}`), [get]);
+  const saveReportTemplate = useCallback((tpl) => {
+    const isNew = tpl._isNew;
+    delete tpl._isNew;
+    return call(`/report-templates${isNew ? '' : '/' + tpl.name}`, tpl, isNew ? 'POST' : 'PUT');
+  }, [call]);
+  const deleteReportTemplate = useCallback((name) => call(`/report-templates/${name}`, {}, 'DELETE'), [call]);
+
+  // Export Pack
+  const exportPack = useCallback(async (options) => {
+    const res = await call('/export-pack', options);
+    // Convert base64 to blob and trigger download
+    if (res.zipBase64) {
+      const binary = atob(res.zipBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = res.filename || 'export-pack.zip';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    return res;
+  }, [call]);
+
   return {
     loading, error, progress,
     analyze, cancelAnalyze,
@@ -206,6 +265,9 @@ export function useBackend() {
     runDfm, runDrawing, runTolerance, runCost,
     generateReport, getExamples,
     importStep, saveStepConfig,
+    getProfiles, getProfile, saveProfile, deleteProfile,
+    getReportTemplates, getReportTemplate, saveReportTemplate, deleteReportTemplate,
+    exportPack,
     setError,
   };
 }

@@ -20,12 +20,32 @@ router.post('/report', async (req, res) => {
     includeTolerance = true,
     includeCost = true,
     analysisResults = null,
+    templateName = null,
+    metadata = null,
   } = req.body;
 
   if (!configPath) return res.status(400).json({ error: 'configPath required' });
 
   try {
     const config = await loadConfig(resolve(freecadRoot, configPath));
+
+    // Load report template if specified
+    let reportTemplate = null;
+    if (templateName) {
+      try {
+        const { readFile } = await import('node:fs/promises');
+        const { join } = await import('node:path');
+        const templatePath = join(freecadRoot, 'configs', 'report-templates', `${templateName}.json`);
+        const templateContent = await readFile(templatePath, 'utf8');
+        reportTemplate = {
+          template_path: templatePath,
+          template: JSON.parse(templateContent),
+          metadata: metadata || {},
+        };
+      } catch {
+        // Template load failed, continue without it
+      }
+    }
 
     // Ensure export directory points to freecad-automation/output
     const outputDir = resolve(freecadRoot, 'output');
@@ -40,6 +60,11 @@ router.post('/report', async (req, res) => {
       },
       _analysis_results: analysisResults,
     };
+
+    // Inject template if available
+    if (reportTemplate) {
+      reportInput._report_template = reportTemplate;
+    }
 
     const result = await runScript('engineering_report.py', reportInput, { timeout: 180_000 });
 

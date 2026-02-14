@@ -12,13 +12,26 @@ router.post('/dfm', async (req, res) => {
   const { runScript } = await import(`${freecadRoot}/lib/runner.js`);
   const { loadConfig } = await import(`${freecadRoot}/lib/config-loader.js`);
 
-  const { configPath, process: mfgProcess = 'machining' } = req.body;
+  const { configPath, process: mfgProcess = 'machining', profileName = null } = req.body;
   if (!configPath) return res.status(400).json({ error: 'configPath required' });
 
   try {
     const config = await loadConfig(resolve(freecadRoot, configPath));
     if (!config.manufacturing) config.manufacturing = {};
     config.manufacturing.process = mfgProcess;
+
+    // Load and inject shop profile if specified
+    if (profileName) {
+      try {
+        const { readFile } = await import('node:fs/promises');
+        const { join } = await import('node:path');
+        const profilePath = join(freecadRoot, 'configs', 'profiles', `${profileName}.json`);
+        const profileContent = await readFile(profilePath, 'utf8');
+        config.shop_profile = JSON.parse(profileContent);
+      } catch {
+        // Profile load failed, continue without it
+      }
+    }
 
     const result = await runScript('dfm_checker.py', config, { timeout: 60_000 });
     res.json(result);
