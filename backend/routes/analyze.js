@@ -115,6 +115,10 @@ router.post('/analyze', async (req, res) => {
     if (options.drawing !== false) {
       send('stage', { stage: 'drawing', status: 'start' });
       try {
+        if (isStepDirect) {
+          throw new Error('Drawing generation is not available for STEP template-only configs. Add [[shapes]] or [[parts]] before generating drawing.');
+        }
+
         const drawKey = cache.getCacheKey('drawing', config, options);
         const drawCached = await cache.checkCache(drawKey);
         if (drawCached.hit) {

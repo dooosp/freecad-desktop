@@ -31,6 +31,14 @@ router.post('/drawing', async (req, res) => {
 
     if (!config.drawing) config.drawing = {};
 
+    const hasShapes = Array.isArray(config.shapes) && config.shapes.length > 0;
+    const hasParts = Array.isArray(config.parts) && config.parts.length > 0;
+    if (!hasShapes && !hasParts && config.import?.source_step) {
+      return res.status(400).json({
+        error: 'Drawing generation is not available for STEP template-only configs. Add [[shapes]] or [[parts]] before generating drawing.',
+      });
+    }
+
     const result = await runScript('generate_drawing.py', config, { timeout: 120_000 });
 
     // Read SVG content
