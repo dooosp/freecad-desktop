@@ -23,7 +23,6 @@ export default function App() {
     standard: 'KS',
     batch: 100,
   });
-  const [analyzeStage, setAnalyzeStage] = useState(null);
 
   useEffect(() => {
     backend.getExamples().then(ex => ex && setExamples(ex));
@@ -32,13 +31,11 @@ export default function App() {
   const handleFileSelect = useCallback((path) => {
     setConfigPath(path);
     setResults(null);
-    setAnalyzeStage(null);
   }, []);
 
   const handleAnalyze = useCallback(async () => {
     if (!configPath) return;
     setResults(null);
-    setAnalyzeStage('analyzing');
     try {
       const data = await backend.analyze(configPath, {
         dfm: true,
@@ -50,24 +47,21 @@ export default function App() {
         batch: settings.batch,
       });
       setResults(data);
-      setAnalyzeStage('done');
     } catch {
-      setAnalyzeStage('error');
+      // error is already set in backend.error
     }
   }, [configPath, settings, backend]);
 
   const handleGenerateReport = useCallback(async () => {
     if (!configPath) return;
-    setAnalyzeStage('report');
     try {
       const data = await backend.generateReport(configPath, {
         analysisResults: results,
       });
       setResults(prev => ({ ...prev, report: data }));
       setViewerTab('pdf');
-      setAnalyzeStage('done');
     } catch {
-      setAnalyzeStage('error');
+      // error handled by backend
     }
   }, [configPath, results, backend]);
 
@@ -79,6 +73,11 @@ export default function App() {
           <h1 className="logo">FreeCAD Studio</h1>
         </div>
         <div className="header-actions">
+          {backend.loading && (
+            <button className="btn btn-secondary" onClick={backend.cancelAnalyze}>
+              Cancel
+            </button>
+          )}
           <button
             className="btn btn-primary"
             disabled={!configPath || backend.loading}
@@ -97,14 +96,20 @@ export default function App() {
       </header>
 
       {/* Progress */}
-      {backend.loading && (
-        <ProgressBar stage={analyzeStage} stages={results?.stages} />
+      {backend.progress && backend.progress.status !== 'done' && (
+        <ProgressBar progress={backend.progress} />
       )}
 
       {/* Error */}
       {backend.error && (
-        <div className="error-bar" onClick={() => backend.setError(null)}>
-          {backend.error}
+        <div className="error-bar">
+          <span className="error-message">
+            {backend.progress?.stage && `[${backend.progress.stage}] `}
+            {backend.error}
+          </span>
+          <button className="error-dismiss" onClick={() => backend.setError(null)}>
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -222,7 +227,24 @@ export default function App() {
           {/* Empty state */}
           {!results && !backend.loading && (
             <div className="empty-state">
-              <p>Select a config file or drag & drop a STEP/TOML file to begin.</p>
+              <div className="empty-state-content">
+                <div className="empty-icon">&#9881;</div>
+                <h3>Ready to Analyze</h3>
+                <div className="empty-steps">
+                  <div className="empty-step">
+                    <span className="step-num">1</span>
+                    <span>Select a config or drop a STEP/TOML file</span>
+                  </div>
+                  <div className="empty-step">
+                    <span className="step-num">2</span>
+                    <span>Adjust process, material, and batch settings</span>
+                  </div>
+                  <div className="empty-step">
+                    <span className="step-num">3</span>
+                    <span>Click <strong>Analyze</strong> to run the full pipeline</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </main>

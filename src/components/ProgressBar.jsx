@@ -1,33 +1,43 @@
 import React from 'react';
 
-const STAGE_LABELS = {
-  analyzing: 'Analyzing...',
-  create: 'Creating 3D Model',
-  drawing: 'Generating Drawing',
-  dfm: 'DFM Analysis',
-  tolerance: 'Tolerance Analysis',
-  cost: 'Cost Estimation',
-  report: 'Generating Report',
-  done: 'Complete',
-  error: 'Error',
-};
+const STAGES = [
+  { key: 'create', label: '3D Model' },
+  { key: 'drawing', label: 'Drawing' },
+  { key: 'dfm', label: 'DFM' },
+  { key: 'tolerance', label: 'Tolerance' },
+  { key: 'cost', label: 'Cost' },
+];
 
-export default function ProgressBar({ stage, stages = [] }) {
-  const allStages = ['create', 'drawing', 'dfm', 'tolerance', 'cost'];
-  const completedCount = stages ? stages.length : 0;
-  const progress = stage === 'done' ? 100 : (completedCount / allStages.length) * 100;
+export default function ProgressBar({ progress }) {
+  if (!progress) return null;
+
+  const { stage, status, completed = [], total = 5 } = progress;
+  const percent = status === 'done' ? 100 : (completed.length / total) * 100;
+  const isError = status === 'error';
 
   return (
     <div className="progress-bar-container">
       <div className="progress-track">
         <div
-          className={`progress-fill ${stage === 'error' ? 'error' : ''}`}
-          style={{ width: `${Math.max(5, progress)}%` }}
+          className={`progress-fill ${isError ? 'error' : ''}`}
+          style={{ width: `${Math.max(5, percent)}%` }}
         />
       </div>
-      <span className="progress-label">
-        {STAGE_LABELS[stage] || stage || 'Processing...'}
-      </span>
+      <div className="progress-stages">
+        {STAGES.map(s => {
+          const isDone = completed.includes(s.key);
+          const isActive = stage === s.key && status === 'start';
+          const isFailed = stage === s.key && isError;
+          return (
+            <span
+              key={s.key}
+              className={`progress-step${isDone ? ' done' : ''}${isActive ? ' active' : ''}${isFailed ? ' failed' : ''}`}
+            >
+              {isDone ? '\u2713' : isFailed ? '\u2717' : ''} {s.label}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }

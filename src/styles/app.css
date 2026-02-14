@@ -109,26 +109,42 @@ body {
 
 /* ===== Error Bar ===== */
 .error-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 8px 16px;
   background: rgba(239, 68, 68, 0.15);
   color: var(--error);
   font-size: 13px;
-  cursor: pointer;
   border-bottom: 1px solid rgba(239, 68, 68, 0.3);
 }
+
+.error-message { flex: 1; }
+
+.error-dismiss {
+  background: none;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: var(--error);
+  padding: 2px 10px;
+  border-radius: var(--radius);
+  font-size: 11px;
+  cursor: pointer;
+  margin-left: 12px;
+}
+.error-dismiss:hover { background: rgba(239, 68, 68, 0.2); }
 
 /* ===== Progress Bar ===== */
 .progress-bar-container {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 16px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
 }
 
 .progress-track {
-  flex: 1;
+  width: 100%;
   height: 4px;
   background: var(--bg-tertiary);
   border-radius: 2px;
@@ -143,11 +159,25 @@ body {
 }
 .progress-fill.error { background: var(--error); }
 
-.progress-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
+.progress-stages {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
 }
+
+.progress-step {
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+.progress-step.done { color: var(--success); }
+.progress-step.active { color: var(--accent); }
+.progress-step.failed { color: var(--error); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.progress-step.active { animation: pulse 1.2s ease-in-out infinite; }
 
 /* ===== Main Layout ===== */
 .main-layout {
@@ -741,6 +771,54 @@ body {
   justify-content: center;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.empty-state-content {
+  text-align: center;
+  max-width: 320px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  opacity: 0.3;
+  margin-bottom: 12px;
+}
+
+.empty-state-content h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.empty-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.empty-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.step-num {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
 /* ===== Scrollbar ===== */

@@ -6,9 +6,11 @@ import { runQaScorer } from '../lib/qa-runner.js';
 const router = Router();
 
 /**
- * POST /api/analyze - All-in-one analysis pipeline
+ * POST /api/analyze - All-in-one analysis pipeline with SSE progress streaming
  * Input: { configPath: string, options: { dfm, drawing, tolerance, process, material, batch } }
- * Runs: create → draw → dfm → tolerance (as enabled)
+ * Output: Server-Sent Events stream
+ *   event: stage  → { stage, status: "start"|"done"|"error", error? }
+ *   event: complete → full results JSON
  */
 router.post('/analyze', async (req, res) => {
   const freecadRoot = req.app.locals.freecadRoot;
@@ -18,6 +20,18 @@ router.post('/analyze', async (req, res) => {
   const { configPath, options = {} } = req.body;
   if (!configPath) return res.status(400).json({ error: 'configPath required' });
 
+  // Set up SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  const send = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
   const fullPath = resolve(freecadRoot, configPath);
   const results = { stages: [], errors: [] };
 
@@ -25,25 +39,28 @@ router.post('/analyze', async (req, res) => {
     const config = await loadConfig(fullPath);
 
     // Stage 1: Create model
-    results.stages.push('create');
+    send('stage', { stage: 'create', status: 'start' });
     try {
       const createResult = await runScript('create_model.py', config, { timeout: 120_000 });
       results.model = createResult;
+      results.stages.push('create');
+      send('stage', { stage: 'create', status: 'done' });
     } catch (err) {
       results.errors.push({ stage: 'create', error: err.message });
-      return res.json(results);
+      send('stage', { stage: 'create', status: 'error', error: err.message });
+      send('complete', results);
+      return res.end();
     }
 
     // Stage 2: Generate drawing (if enabled)
     if (options.drawing !== false) {
-      results.stages.push('drawing');
+      send('stage', { stage: 'drawing', status: 'start' });
       try {
         const drawConfig = { ...config };
         if (!drawConfig.drawing) drawConfig.drawing = {};
         const drawResult = await runScript('generate_drawing.py', drawConfig, { timeout: 120_000 });
         results.drawing = drawResult;
 
-        // Read SVG if available
         const svgEntry = drawResult.drawing_paths?.find(p => p.format === 'svg');
         const svgPath = drawResult.svg_path || drawResult.drawing_path || svgEntry?.path;
         if (svgPath) {
@@ -56,14 +73,17 @@ router.post('/analyze', async (req, res) => {
             results.qa = await runQaScorer(freecadRoot, svgPath);
           } catch { /* QA optional */ }
         }
+        results.stages.push('drawing');
+        send('stage', { stage: 'drawing', status: 'done' });
       } catch (err) {
         results.errors.push({ stage: 'drawing', error: err.message });
+        send('stage', { stage: 'drawing', status: 'error', error: err.message });
       }
     }
 
     // Stage 3: DFM check (if enabled)
     if (options.dfm !== false) {
-      results.stages.push('dfm');
+      send('stage', { stage: 'dfm', status: 'start' });
       try {
         const dfmConfig = { ...config };
         if (!dfmConfig.manufacturing) {
@@ -71,25 +91,31 @@ router.post('/analyze', async (req, res) => {
         }
         const dfmResult = await runScript('dfm_checker.py', dfmConfig, { timeout: 60_000 });
         results.dfm = dfmResult;
+        results.stages.push('dfm');
+        send('stage', { stage: 'dfm', status: 'done' });
       } catch (err) {
         results.errors.push({ stage: 'dfm', error: err.message });
+        send('stage', { stage: 'dfm', status: 'error', error: err.message });
       }
     }
 
     // Stage 4: Tolerance analysis (if enabled and tolerance section exists)
     if (options.tolerance !== false && config.tolerance) {
-      results.stages.push('tolerance');
+      send('stage', { stage: 'tolerance', status: 'start' });
       try {
         const tolResult = await runScript('tolerance_analysis.py', config, { timeout: 60_000 });
         results.tolerance = tolResult;
+        results.stages.push('tolerance');
+        send('stage', { stage: 'tolerance', status: 'done' });
       } catch (err) {
         results.errors.push({ stage: 'tolerance', error: err.message });
+        send('stage', { stage: 'tolerance', status: 'error', error: err.message });
       }
     }
 
     // Stage 5: Cost estimation (if enabled)
     if (options.cost !== false) {
-      results.stages.push('cost');
+      send('stage', { stage: 'cost', status: 'start' });
       try {
         const costInput = {
           ...config,
@@ -100,14 +126,19 @@ router.post('/analyze', async (req, res) => {
         };
         const costResult = await runScript('cost_estimator.py', costInput, { timeout: 60_000 });
         results.cost = costResult;
+        results.stages.push('cost');
+        send('stage', { stage: 'cost', status: 'done' });
       } catch (err) {
         results.errors.push({ stage: 'cost', error: err.message });
+        send('stage', { stage: 'cost', status: 'error', error: err.message });
       }
     }
 
-    res.json(results);
+    send('complete', results);
+    res.end();
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    send('error', { error: err.message });
+    res.end();
   }
 });
 

@@ -12,19 +12,22 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             // Start the Node.js backend server as a sidecar process
-            let backend_dir = app.path().resource_dir()
-                .unwrap_or_else(|_| std::env::current_dir().unwrap())
-                .join("backend");
+            // In dev mode, src-tauri is the cwd; backend is at ../backend/server.js
+            let cwd = std::env::current_dir().unwrap();
+            let candidates = [
+                cwd.join("backend").join("server.js"),           // production: cwd/backend/
+                cwd.join("..").join("backend").join("server.js"), // dev: src-tauri/../backend/
+            ];
 
-            // Fallback to project directory structure for development
-            let server_path = if backend_dir.join("server.js").exists() {
-                backend_dir.join("server.js")
-            } else {
-                std::env::current_dir().unwrap().join("backend").join("server.js")
-            };
+            let server_path = candidates.iter()
+                .find(|p| p.exists())
+                .cloned()
+                .unwrap_or_else(|| candidates[0].clone());
 
+            let backend_dir = server_path.parent().unwrap();
             let child = Command::new("node")
                 .arg(&server_path)
+                .current_dir(backend_dir)
                 .spawn()
                 .expect("Failed to start backend server");
 
