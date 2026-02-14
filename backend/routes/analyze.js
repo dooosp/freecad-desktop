@@ -2,12 +2,13 @@ import { Router } from 'express';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { runQaScorer } from '../lib/qa-runner.js';
+import { postprocessSvg } from '../lib/svg-postprocess.js';
 
 const router = Router();
 
 /**
  * POST /api/analyze - All-in-one analysis pipeline with SSE progress streaming
- * Input: { configPath: string, options: { dfm, drawing, tolerance, process, material, batch } }
+ * Input: { configPath: string, options: { dfm, drawing, tolerance, process, material, batch, monteCarlo, mcSamples, weightsPreset } }
  * Output: Server-Sent Events stream
  *   event: stage  → { stage, status: "start"|"done"|"error", error? }
  *   event: complete → full results JSON
@@ -39,6 +40,7 @@ router.post('/analyze', async (req, res) => {
     const config = await loadConfig(fullPath);
     const hasShapes = Array.isArray(config.shapes) && config.shapes.length > 0;
     const hasAssemblyParts = Array.isArray(config.parts) && config.parts.length > 0;
+    const hasAssembly = Boolean(config.assembly);
     const canCreateModel = hasShapes || hasAssemblyParts;
 
     // Stage 1: Create model
@@ -74,12 +76,19 @@ router.post('/analyze', async (req, res) => {
         const svgPath = drawResult.svg_path || drawResult.drawing_path || svgEntry?.path;
         if (svgPath) {
           try {
+            await postprocessSvg(freecadRoot, svgPath, {
+              profile: drawConfig.drawing_plan?.style?.stroke_profile || 'ks',
+            });
+          } catch { /* Post-process optional */ }
+          try {
             const { toWSL } = await import(`${freecadRoot}/lib/paths.js`);
             const wslSvg = toWSL(svgPath);
             results.drawingSvg = await readFile(wslSvg, 'utf8');
           } catch { /* SVG read optional */ }
           try {
-            results.qa = await runQaScorer(freecadRoot, svgPath);
+            results.qa = await runQaScorer(freecadRoot, svgPath, {
+              weightsPreset: options.weightsPreset,
+            });
           } catch { /* QA optional */ }
         }
         results.stages.push('drawing');
@@ -109,11 +118,22 @@ router.post('/analyze', async (req, res) => {
       }
     }
 
-    // Stage 4: Tolerance analysis (if enabled and tolerance section exists)
-    if (options.tolerance !== false && config.tolerance) {
+    // Stage 4: Tolerance analysis (if enabled and assembly config exists)
+    if (options.tolerance !== false && hasAssembly && hasAssemblyParts) {
       send('stage', { stage: 'tolerance', status: 'start' });
       try {
-        const tolResult = await runScript('tolerance_analysis.py', config, { timeout: 60_000 });
+        const tolConfig = {
+          ...config,
+          tolerance: { ...(config.tolerance || {}) },
+        };
+        if (typeof options.monteCarlo === 'boolean') {
+          tolConfig.tolerance.monte_carlo = options.monteCarlo;
+        }
+        const parsedSamples = Number(options.mcSamples);
+        if (Number.isFinite(parsedSamples) && parsedSamples > 0) {
+          tolConfig.tolerance.mc_samples = Math.floor(parsedSamples);
+        }
+        const tolResult = await runScript('tolerance_analysis.py', tolConfig, { timeout: 60_000 });
         results.tolerance = tolResult;
         results.stages.push('tolerance');
         send('stage', { stage: 'tolerance', status: 'done' });
