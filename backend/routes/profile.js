@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { readdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { asyncHandler, createHttpError } from '../lib/async-handler.js';
+import { loadShopProfile } from '../lib/profile-loader.js';
 
 const router = Router();
 
@@ -8,59 +10,45 @@ const router = Router();
  * POST /api/profiles/compare - Compare two profiles (DFM + Cost only, skip model/drawing)
  * Body: { configPath, profileA, profileB, options: { process, material, batch } }
  */
-router.post('/compare', async (req, res) => {
-  const freecadRoot = req.app.locals.freecadRoot;
-  const { runScript } = await import(`${freecadRoot}/lib/runner.js`);
-  const { loadConfig } = await import(`${freecadRoot}/lib/config-loader.js`);
-
+router.post('/compare', asyncHandler(async (req, res) => {
+  const { freecadRoot, runScript, loadConfig } = req.app.locals;
   const { configPath, profileA, profileB, options = {} } = req.body;
-  if (!configPath) return res.status(400).json({ error: 'configPath required' });
-  if (!profileA || !profileB) return res.status(400).json({ error: 'profileA and profileB required' });
+  if (!configPath) throw createHttpError(400, 'configPath required');
+  if (!profileA || !profileB) throw createHttpError(400, 'profileA and profileB required');
 
-  try {
-    const config = await loadConfig(resolve(freecadRoot, configPath));
+  const config = await loadConfig(resolve(freecadRoot, configPath));
 
-    async function loadProfile(name) {
-      if (!name || name === '_default') return null;
-      const p = join(freecadRoot, 'configs', 'profiles', `${name}.json`);
-      const content = await readFile(p, 'utf8');
-      return JSON.parse(content);
-    }
+  async function runWithProfile(profileName) {
+    const profile = await loadShopProfile(freecadRoot, profileName, { silent: false });
+    const dfmConfig = { ...config };
+    if (!dfmConfig.manufacturing) dfmConfig.manufacturing = {};
+    if (options.process) dfmConfig.manufacturing.process = options.process;
+    if (options.material) dfmConfig.manufacturing.material = options.material;
+    if (!dfmConfig.manufacturing.process) dfmConfig.manufacturing.process = 'machining';
+    if (profile) dfmConfig.shop_profile = profile;
 
-    async function runWithProfile(profileName) {
-      const profile = await loadProfile(profileName);
-      const dfmConfig = { ...config };
-      if (!dfmConfig.manufacturing) dfmConfig.manufacturing = {};
-      if (options.process) dfmConfig.manufacturing.process = options.process;
-      if (options.material) dfmConfig.manufacturing.material = options.material;
-      if (!dfmConfig.manufacturing.process) dfmConfig.manufacturing.process = 'machining';
-      if (profile) dfmConfig.shop_profile = profile;
+    const dfm = await runScript('dfm_checker.py', dfmConfig, { timeout: 60_000 });
 
-      const dfm = await runScript('dfm_checker.py', dfmConfig, { timeout: 60_000 });
+    const costInput = {
+      ...config,
+      dfm_result: dfm || null,
+      material: options.material || config.manufacturing?.material || 'SS304',
+      process: options.process || config.manufacturing?.process || 'machining',
+      batch_size: options.batch || 1,
+    };
+    if (profile) costInput.shop_profile = profile;
 
-      const costInput = {
-        ...config,
-        dfm_result: dfm || null,
-        material: options.material || config.manufacturing?.material || 'SS304',
-        process: options.process || config.manufacturing?.process || 'machining',
-        batch_size: options.batch || 1,
-      };
-      if (profile) costInput.shop_profile = profile;
-
-      const cost = await runScript('cost_estimator.py', costInput, { timeout: 60_000 });
-      return { name: profileName, dfm, cost };
-    }
-
-    const [resultA, resultB] = await Promise.all([
-      runWithProfile(profileA),
-      runWithProfile(profileB),
-    ]);
-
-    res.json({ profileA: resultA, profileB: resultB });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const cost = await runScript('cost_estimator.py', costInput, { timeout: 60_000 });
+    return { name: profileName, dfm, cost };
   }
-});
+
+  const [resultA, resultB] = await Promise.all([
+    runWithProfile(profileA),
+    runWithProfile(profileB),
+  ]);
+
+  res.json({ profileA: resultA, profileB: resultB });
+}));
 
 /**
  * GET /api/profiles - List all shop profiles

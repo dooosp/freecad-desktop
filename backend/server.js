@@ -2,12 +2,16 @@ import express from 'express';
 import { createServer } from 'node:http';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { asyncHandler } from './lib/async-handler.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FREECAD_ROOT = resolve(__dirname, '..', '..', 'freecad-automation');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
+
+const { runScript } = await import(`${FREECAD_ROOT}/lib/runner.js`);
+const { loadConfig, deepMerge } = await import(`${FREECAD_ROOT}/lib/config-loader.js`);
 
 // CORS for dev mode
 app.use((req, res, next) => {
@@ -20,6 +24,9 @@ app.use((req, res, next) => {
 
 // Make freecad-automation root available to routes
 app.locals.freecadRoot = FREECAD_ROOT;
+app.locals.runScript = runScript;
+app.locals.loadConfig = loadConfig;
+app.locals.deepMerge = deepMerge;
 
 // Routes
 const { default: analyzeRouter } = await import('./routes/analyze.js');
@@ -67,30 +74,28 @@ app.get('/api/examples', (req, res) => {
 });
 
 // Inspect STEP file
-app.post('/api/inspect', async (req, res) => {
-  const { runScript } = await import(`${FREECAD_ROOT}/lib/runner.js`);
-  try {
-    const result = await runScript('inspect_model.py', req.body, { timeout: 60_000 });
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+app.post('/api/inspect', asyncHandler(async (req, res) => {
+  const result = await req.app.locals.runScript('inspect_model.py', req.body, { timeout: 60_000 });
+  res.json(result);
+}));
 
 // Create model from config
-app.post('/api/create', async (req, res) => {
-  const { runScript } = await import(`${FREECAD_ROOT}/lib/runner.js`);
-  try {
-    const result = await runScript('create_model.py', req.body, { timeout: 120_000 });
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+app.post('/api/create', asyncHandler(async (req, res) => {
+  const result = await req.app.locals.runScript('create_model.py', req.body, { timeout: 120_000 });
+  res.json(result);
+}));
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', freecadRoot: FREECAD_ROOT });
+});
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err?.status || 500;
+  const message = err?.message || 'Internal Server Error';
+  console.error(`[${req.method} ${req.path}] ${message}`);
+  res.status(status).json({ error: message });
 });
 
 const PORT = process.env.PORT || 18080;

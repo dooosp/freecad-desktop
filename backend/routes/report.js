@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { resolve, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { asyncHandler, createHttpError } from '../lib/async-handler.js';
+import { loadShopProfile } from '../lib/profile-loader.js';
 
 const router = Router();
 
@@ -71,11 +73,8 @@ function sanitizeObject(value) {
  * POST /api/report - Generate integrated PDF report
  * Input: { configPath: string, includeDrawing, includeDfm, includeTolerance, includeCost }
  */
-router.post('/report', async (req, res) => {
-  const freecadRoot = req.app.locals.freecadRoot;
-  const { runScript } = await import(`${freecadRoot}/lib/runner.js`);
-  const { loadConfig } = await import(`${freecadRoot}/lib/config-loader.js`);
-
+router.post('/report', asyncHandler(async (req, res) => {
+  const { freecadRoot, runScript, loadConfig } = req.app.locals;
   const {
     configPath,
     includeDrawing = true,
@@ -90,115 +89,103 @@ router.post('/report', async (req, res) => {
     profileName = null,
   } = req.body;
 
-  if (!configPath) return res.status(400).json({ error: 'configPath required' });
+  if (!configPath) throw createHttpError(400, 'configPath required');
 
-  try {
-    const config = await loadConfig(resolve(freecadRoot, configPath));
-    const normalizedResults = (analysisResults && typeof analysisResults === 'object')
-      ? sanitizeObject(analysisResults)
-      : {};
+  const config = await loadConfig(resolve(freecadRoot, configPath));
+  const normalizedResults = (analysisResults && typeof analysisResults === 'object')
+    ? sanitizeObject(analysisResults)
+    : {};
 
-    // Load shop profile if specified
-    let shopProfile = null;
-    if (profileName) {
-      try {
-        const profilePath = join(freecadRoot, 'configs', 'profiles', `${profileName}.json`);
-        const profileContent = await readFile(profilePath, 'utf8');
-        shopProfile = JSON.parse(profileContent);
-      } catch { /* optional */ }
+  const shopProfile = await loadShopProfile(freecadRoot, profileName);
+
+  // Load report template if specified
+  let reportTemplate = null;
+  if (templateName) {
+    try {
+      const templatePath = join(freecadRoot, 'configs', 'report-templates', `${templateName}.json`);
+      const templateContent = await readFile(templatePath, 'utf8');
+      const template = mergeTemplateOverrides(JSON.parse(templateContent), sections, options);
+      const templateMetadata = {
+        ...(metadata || {}),
+        profile_name: profileName || '',
+        template_name: templateName,
+      };
+      reportTemplate = {
+        template_path: templatePath,
+        template,
+        metadata: templateMetadata,
+      };
+    } catch {
+      // Template load failed, continue without it
     }
-
-    // Load report template if specified
-    let reportTemplate = null;
-    if (templateName) {
-      try {
-        const templatePath = join(freecadRoot, 'configs', 'report-templates', `${templateName}.json`);
-        const templateContent = await readFile(templatePath, 'utf8');
-        const template = mergeTemplateOverrides(JSON.parse(templateContent), sections, options);
-        const templateMetadata = {
-          ...(metadata || {}),
-          profile_name: profileName || '',
-          template_name: templateName,
-        };
-        reportTemplate = {
-          template_path: templatePath,
-          template,
-          metadata: templateMetadata,
-        };
-      } catch {
-        // Template load failed, continue without it
-      }
-    }
-
-    const tolInput = normalizedResults.tolerance
-      ? { ...normalizedResults.tolerance }
-      : null;
-    if (tolInput && !Array.isArray(tolInput.fits) && Array.isArray(tolInput.pairs)) {
-      tolInput.fits = tolInput.pairs.map((pair) => ({
-        bore: pair.bore_part || '',
-        shaft: pair.shaft_part || '',
-        spec: pair.spec || '',
-        fit_type: pair.fit_type || '',
-        min_clearance: pair.clearance_min,
-        max_clearance: pair.clearance_max,
-      }));
-    }
-
-    const resolvedIncludeDrawing = toBool(sections?.drawing, includeDrawing);
-    const resolvedIncludeDfm = toBool(sections?.dfm, includeDfm);
-    const resolvedIncludeTolerance = toBool(sections?.tolerance, includeTolerance);
-    const resolvedIncludeCost = toBool(sections?.cost, includeCost);
-
-    // Ensure export directory points to freecad-automation/output
-    const outputDir = resolve(freecadRoot, 'output');
-    const modelResult = normalizedResults.model || {};
-    const qaResult = resolvedIncludeDrawing ? (normalizedResults.qa || {}) : {};
-    const dfmResult = resolvedIncludeDfm ? (normalizedResults.dfm || {}) : {};
-    const toleranceResult = resolvedIncludeTolerance ? (tolInput || {}) : {};
-    const costResult = resolvedIncludeCost ? (normalizedResults.cost || {}) : {};
-
-    const reportInput = {
-      ...config,
-      standard: (analysisResults && analysisResults.standard) || config.standard || options?.standard || 'KS',
-      ...(shopProfile ? { shop_profile: shopProfile } : {}),
-      export: { ...config.export, directory: outputDir },
-      _report_options: {
-        include_drawing: resolvedIncludeDrawing,
-        include_dfm: resolvedIncludeDfm,
-        include_tolerance: resolvedIncludeTolerance,
-        include_cost: resolvedIncludeCost,
-      },
-      _analysis_results: normalizedResults,
-      model_result: modelResult,
-      qa_result: qaResult,
-      dfm_results: dfmResult,
-      tolerance_results: toleranceResult,
-      cost_result: costResult,
-      bom: normalizedResults.drawing?.bom || config.bom || [],
-    };
-
-    // Inject template if available
-    if (reportTemplate) {
-      reportInput._report_template = reportTemplate;
-    }
-
-    const result = await runScript('engineering_report.py', reportInput, { timeout: 180_000 });
-
-    // Read PDF — result.path is relative or absolute Windows path
-    const pdfRelPath = result.pdf_path || result.path;
-    if (pdfRelPath) {
-      try {
-        const { toWSL } = await import(`${freecadRoot}/lib/paths.js`);
-        const pdfWSL = toWSL(pdfRelPath);
-        const pdfBuffer = await readFile(pdfWSL);
-        result.pdfBase64 = pdfBuffer.toString('base64');
-      } catch { /* PDF read optional */ }
-    }
-
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
   }
-});
+
+  const tolInput = normalizedResults.tolerance
+    ? { ...normalizedResults.tolerance }
+    : null;
+  if (tolInput && !Array.isArray(tolInput.fits) && Array.isArray(tolInput.pairs)) {
+    tolInput.fits = tolInput.pairs.map((pair) => ({
+      bore: pair.bore_part || '',
+      shaft: pair.shaft_part || '',
+      spec: pair.spec || '',
+      fit_type: pair.fit_type || '',
+      min_clearance: pair.clearance_min,
+      max_clearance: pair.clearance_max,
+    }));
+  }
+
+  const resolvedIncludeDrawing = toBool(sections?.drawing, includeDrawing);
+  const resolvedIncludeDfm = toBool(sections?.dfm, includeDfm);
+  const resolvedIncludeTolerance = toBool(sections?.tolerance, includeTolerance);
+  const resolvedIncludeCost = toBool(sections?.cost, includeCost);
+
+  // Ensure export directory points to freecad-automation/output
+  const outputDir = resolve(freecadRoot, 'output');
+  const modelResult = normalizedResults.model || {};
+  const qaResult = resolvedIncludeDrawing ? (normalizedResults.qa || {}) : {};
+  const dfmResult = resolvedIncludeDfm ? (normalizedResults.dfm || {}) : {};
+  const toleranceResult = resolvedIncludeTolerance ? (tolInput || {}) : {};
+  const costResult = resolvedIncludeCost ? (normalizedResults.cost || {}) : {};
+
+  const reportInput = {
+    ...config,
+    standard: (analysisResults && analysisResults.standard) || config.standard || options?.standard || 'KS',
+    ...(shopProfile ? { shop_profile: shopProfile } : {}),
+    export: { ...config.export, directory: outputDir },
+    _report_options: {
+      include_drawing: resolvedIncludeDrawing,
+      include_dfm: resolvedIncludeDfm,
+      include_tolerance: resolvedIncludeTolerance,
+      include_cost: resolvedIncludeCost,
+    },
+    _analysis_results: normalizedResults,
+    model_result: modelResult,
+    qa_result: qaResult,
+    dfm_results: dfmResult,
+    tolerance_results: toleranceResult,
+    cost_result: costResult,
+    bom: normalizedResults.drawing?.bom || config.bom || [],
+  };
+
+  // Inject template if available
+  if (reportTemplate) {
+    reportInput._report_template = reportTemplate;
+  }
+
+  const result = await runScript('engineering_report.py', reportInput, { timeout: 180_000 });
+
+  // Read PDF — result.path is relative or absolute Windows path
+  const pdfRelPath = result.pdf_path || result.path;
+  if (pdfRelPath) {
+    try {
+      const { toWSL } = await import(`${freecadRoot}/lib/paths.js`);
+      const pdfWSL = toWSL(pdfRelPath);
+      const pdfBuffer = await readFile(pdfWSL);
+      result.pdfBase64 = pdfBuffer.toString('base64');
+    } catch { /* PDF read optional */ }
+  }
+
+  res.json(result);
+}));
 
 export default router;

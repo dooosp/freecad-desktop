@@ -4,6 +4,7 @@ import { resolve, basename, extname, join } from 'node:path';
 import { runQaScorer } from '../lib/qa-runner.js';
 import { postprocessSvg } from '../lib/svg-postprocess.js';
 import { AnalysisCache } from '../lib/analysis-cache.js';
+import { loadShopProfile } from '../lib/profile-loader.js';
 
 const router = Router();
 
@@ -15,9 +16,7 @@ const router = Router();
  *   event: complete → full results JSON
  */
 router.post('/analyze', async (req, res) => {
-  const freecadRoot = req.app.locals.freecadRoot;
-  const { runScript } = await import(`${freecadRoot}/lib/runner.js`);
-  const { loadConfig } = await import(`${freecadRoot}/lib/config-loader.js`);
+  const { freecadRoot, runScript, loadConfig } = req.app.locals;
 
   const { configPath, options = {}, profileName = null } = req.body;
   if (!configPath) return res.status(400).json({ error: 'configPath required' });
@@ -47,18 +46,7 @@ router.post('/analyze', async (req, res) => {
     const canCreateModel = hasShapes || hasAssemblyParts;
 
     // Load shop profile if specified
-    let shopProfile = null;
-    if (profileName) {
-      try {
-        const { readFile } = await import('node:fs/promises');
-        const { join } = await import('node:path');
-        const profilePath = join(freecadRoot, 'configs', 'profiles', `${profileName}.json`);
-        const profileContent = await readFile(profilePath, 'utf8');
-        shopProfile = JSON.parse(profileContent);
-      } catch {
-        // Profile load failed, continue without it
-      }
-    }
+    const shopProfile = await loadShopProfile(freecadRoot, profileName);
 
     // Stage 1: Create model (or STEP Direct Track)
     const isStepDirect = !canCreateModel && !!config.import?.source_step;
