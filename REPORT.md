@@ -535,6 +535,10 @@ npm run tauri dev
   - `backend/routes/cache.test.js`
   - `backend/routes/project.test.js`
   - `backend/routes/diagnostics.test.js`
+  - `backend/routes/cost.test.js`
+  - `backend/routes/dfm.test.js`
+  - `backend/routes/drawing.test.js`
+  - `backend/routes/tolerance.test.js`
 - 컨텍스트 통합 회귀 테스트 추가
   - `src/components/appShell.integration.test.jsx`
 
