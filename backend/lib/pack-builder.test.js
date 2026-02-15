@@ -42,6 +42,34 @@ describe('pack-builder path helpers', () => {
     await rm(freecadRoot, { recursive: true, force: true });
   });
 
+  it('handles Windows absolute-style path via output basename fallback', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'pack-builder-cwd-'));
+    const freecadRoot = await mkdtemp(join(tmpdir(), 'pack-builder-root-'));
+    await mkdir(join(freecadRoot, 'output'), { recursive: true });
+    const dxf = join(freecadRoot, 'output', 'win_front.dxf');
+    await writeFile(dxf, 'dxf', 'utf8');
+
+    const resolved = toOutputPath('C:\\Users\\taeho\\output\\win_front.dxf', [freecadRoot], cwd);
+    expect(resolved).toBe(dxf);
+
+    await rm(cwd, { recursive: true, force: true });
+    await rm(freecadRoot, { recursive: true, force: true });
+  });
+
+  it('handles UNC-style path via output basename fallback', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'pack-builder-cwd-'));
+    const freecadRoot = await mkdtemp(join(tmpdir(), 'pack-builder-root-'));
+    await mkdir(join(freecadRoot, 'output'), { recursive: true });
+    const svg = join(freecadRoot, 'output', 'unc_drawing.svg');
+    await writeFile(svg, '<svg/>', 'utf8');
+
+    const resolved = toOutputPath('\\\\server\\share\\output\\unc_drawing.svg', [freecadRoot], cwd);
+    expect(resolved).toBe(svg);
+
+    await rm(cwd, { recursive: true, force: true });
+    await rm(freecadRoot, { recursive: true, force: true });
+  });
+
   it('returns null when source file is missing', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'pack-builder-cwd-'));
     const freecadRoot = await mkdtemp(join(tmpdir(), 'pack-builder-root-'));

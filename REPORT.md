@@ -555,5 +555,79 @@ npm run tauri dev
 ```bash
 npm run verify
 npm run test:coverage
+npm run report:smoke
 npm run ci:status   # gh 로그인/네트워크 가능 환경에서 CI 상태 확인
 ```
+
+### 11.5 최근 스모크 요약 (자동 생성)
+
+<!-- SMOKE_SUMMARY:START -->
+_Updated: 2026-02-15T01:37:29.188Z_
+- Result: `ok`
+- Analyze stages: create, drawing, dfm, cost
+- Analyze DXF output: yes
+- Profile compare: `_default` vs `sample_precision` (90 / 95)
+- Template CRUD: pass
+- Export DXF in ZIP: yes
+- STEP flow: pass
+
+```json
+{
+  "ok": true,
+  "summary": {
+    "profile": {
+      "count": 2,
+      "hasDefault": true
+    },
+    "analyze": {
+      "stages": [
+        "create",
+        "drawing",
+        "dfm",
+        "cost"
+      ],
+      "hasModel": true,
+      "hasDrawing": true,
+      "hasDxf": true,
+      "hasDfm": true,
+      "hasCost": true,
+      "errors": 0
+    },
+    "profileCompare": {
+      "success": true,
+      "profileA": "_default",
+      "profileB": "sample_precision",
+      "scoreA": 90,
+      "scoreB": 95
+    },
+    "templateCrud": {
+      "success": true,
+      "createdName": "smoke_template_1771119399427",
+      "fetched": true,
+      "listed": true,
+      "deleted": true
+    },
+    "rerun": {
+      "stage": "dfm",
+      "success": true,
+      "score": 95
+    },
+    "report": {
+      "success": true,
+      "hasPdfBase64": true
+    },
+    "exportPack": {
+      "success": true,
+      "filename": "mock-pack.zip",
+      "zipBytes": 34,
+      "hasDxfEntry": true
+    },
+    "step": {
+      "success": true,
+      "configPath": "configs/imports/mock-part.toml",
+      "hasAnalysis": true
+    }
+  }
+}
+```
+<!-- SMOKE_SUMMARY:END -->
