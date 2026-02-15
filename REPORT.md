@@ -547,6 +547,8 @@ npm run tauri dev
   - `backend/routes/report.route.test.js`
   - `backend/routes/router-contracts.test.js`
   - `backend/server.test.js`
+  - `backend/routes/project.test.js` (예외/에러 분기 보강)
+  - `backend/routes/report.test.js` (tolerance/pairs + pdfBase64 경로 보강)
 - 백엔드 유틸 단위 테스트 확장
   - `backend/lib/analysis-cache.test.js`
   - `backend/lib/cost-estimator.test.js`
@@ -558,6 +560,11 @@ npm run tauri dev
   - `backend/lib/pack-builder.test.js` (buildPack 경로 포함)
 - 컨텍스트 통합 회귀 테스트 추가
   - `src/components/appShell.integration.test.jsx`
+- UI 컴포넌트 단위 테스트 확장
+  - `src/components/FileDropZone.test.jsx`
+  - `src/components/ProgressBar.test.jsx`
+  - `src/components/DrawingViewer.test.jsx`
+  - `src/components/ReportPreview.test.jsx`
 
 ### 11.2 자동 스모크 검증
 

@@ -63,6 +63,24 @@ describe('project route handlers', () => {
     expect(recent[0].path).toBe(res.jsonBody.path);
   });
 
+  it('returns 500 when project save fails due to invalid root path', async () => {
+    const freecadRoot = await mkdtemp(join(tmpdir(), 'project-route-test-'));
+    tempRoots.push(freecadRoot);
+    const rootFile = join(freecadRoot, 'not-a-dir');
+    await writeFile(rootFile, 'x', 'utf8');
+
+    const req = createMockReq({
+      body: { projectData: { name: 'broken-save' } },
+      appLocals: { freecadRoot: rootFile },
+    });
+    const res = createMockRes();
+
+    await saveProjectHandler(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody.error).toBeTruthy();
+  });
+
   it('handles open validation and invalid JSON format', async () => {
     const freecadRoot = await mkdtemp(join(tmpdir(), 'project-route-test-'));
     tempRoots.push(freecadRoot);
@@ -86,6 +104,40 @@ describe('project route handlers', () => {
 
     expect(brokenRes.statusCode).toBe(400);
     expect(brokenRes.jsonBody.error).toMatch(/json parse failed/i);
+  });
+
+  it('returns 400/404/500 across open error branches', async () => {
+    const freecadRoot = await mkdtemp(join(tmpdir(), 'project-route-test-'));
+    tempRoots.push(freecadRoot);
+
+    const missingPathReq = createMockReq({
+      body: {},
+      appLocals: { freecadRoot },
+    });
+    const missingPathRes = createMockRes();
+    await openProjectHandler(missingPathReq, missingPathRes);
+    expect(missingPathRes.statusCode).toBe(400);
+    expect(missingPathRes.jsonBody.error).toMatch(/filePath is required/i);
+
+    const missingFileReq = createMockReq({
+      body: { filePath: join(freecadRoot, 'projects', 'missing.fcstudio') },
+      appLocals: { freecadRoot },
+    });
+    const missingFileRes = createMockRes();
+    await openProjectHandler(missingFileReq, missingFileRes);
+    expect(missingFileRes.statusCode).toBe(404);
+    expect(missingFileRes.jsonBody.error).toMatch(/not found/i);
+
+    const dirPath = join(freecadRoot, 'projects', 'as_dir.fcstudio');
+    await mkdir(dirPath, { recursive: true });
+    const readErrReq = createMockReq({
+      body: { filePath: dirPath },
+      appLocals: { freecadRoot },
+    });
+    const readErrRes = createMockRes();
+    await openProjectHandler(readErrReq, readErrRes);
+    expect(readErrRes.statusCode).toBe(500);
+    expect(readErrRes.jsonBody.error).toBeTruthy();
   });
 
   it('opens project and returns recent list', async () => {
@@ -114,5 +166,32 @@ describe('project route handlers', () => {
 
     expect(recentRes.statusCode).toBe(200);
     expect(recentRes.jsonBody[0].path).toBe(projectPath);
+  });
+
+  it('returns 500 when response serialization fails in recent projects handler', async () => {
+    const freecadRoot = await mkdtemp(join(tmpdir(), 'project-route-test-'));
+    tempRoots.push(freecadRoot);
+
+    const req = createMockReq({ appLocals: { freecadRoot } });
+    const res = {
+      statusCode: 200,
+      jsonBody: null,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        if (this.statusCode === 200) {
+          throw new Error('serialize failed');
+        }
+        this.jsonBody = payload;
+        return this;
+      },
+    };
+
+    await recentProjectsHandler(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody.error).toBe('serialize failed');
   });
 });
