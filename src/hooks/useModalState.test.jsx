@@ -171,4 +171,54 @@ describe('useModalState', () => {
     }));
     expect(result.current.showExportModal).toBe(false);
   });
+
+  it('surfaces template load failure through backend error state', async () => {
+    const backend = createBackendMock({
+      getReportTemplate: vi.fn().mockRejectedValue(new Error('template load failed')),
+    });
+
+    const { result } = renderHook(() => useModalState({
+      backend,
+      configPath: 'configs/examples/ks_flange.toml',
+      results: {},
+      setResults: vi.fn(),
+      activeProfile: '_default',
+      setViewerTab: vi.fn(),
+    }));
+
+    await act(async () => {
+      await result.current.handleEditTemplate('tpl-a');
+    });
+
+    expect(backend.setError).toHaveBeenCalledWith('Failed to load template');
+  });
+
+  it('surfaces export failure and keeps export modal open', async () => {
+    const backend = createBackendMock({
+      exportPack: vi.fn().mockRejectedValue(new Error('export failed')),
+    });
+
+    const { result } = renderHook(() => useModalState({
+      backend,
+      configPath: 'configs/examples/ks_flange.toml',
+      results: { report: { pdfBase64: 'pdf' } },
+      setResults: vi.fn(),
+      activeProfile: '_default',
+      setViewerTab: vi.fn(),
+    }));
+
+    act(() => {
+      result.current.openExportModal();
+    });
+
+    await act(async () => {
+      await result.current.handleExportPack({
+        configPath: 'configs/examples/ks_flange.toml',
+        include: { report: true },
+      });
+    });
+
+    expect(backend.setError).toHaveBeenCalledWith('Failed to generate export pack');
+    expect(result.current.showExportModal).toBe(true);
+  });
 });

@@ -22,11 +22,5 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Unit Tests
-        run: npm test
-
-      - name: Build
-        run: npm run build
-
-      - name: Core Smoke (Mock)
-        run: SMOKE_MOCK=1 BACKEND_PORT=18081 npm run smoke:core
+      - name: Verify
+        run: npm run verify

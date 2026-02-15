@@ -50,7 +50,9 @@ describe('useProfileState', () => {
       expect(backend.getProfile).toHaveBeenCalledWith('sample_precision');
     });
 
-    expect(result.current.activeProfileData?.name).toBe('sample_precision');
+    await waitFor(() => {
+      expect(result.current.activeProfileData?.name).toBe('sample_precision');
+    });
   });
 
   it('creates a new profile draft and opens profile modal', async () => {
@@ -115,5 +117,33 @@ describe('useProfileState', () => {
     });
 
     expect(backend.setError).toHaveBeenCalledWith('Failed to load profile');
+  });
+
+  it('surfaces save failure through backend error state', async () => {
+    const backend = createBackendMock({
+      saveProfile: vi.fn().mockRejectedValue(new Error('save failed')),
+    });
+
+    const { result } = renderHook(() => useProfileState({ backend }));
+
+    await act(async () => {
+      await result.current.handleSaveProfile({ name: 'sample_precision' });
+    });
+
+    expect(backend.setError).toHaveBeenCalledWith('Failed to save profile');
+  });
+
+  it('surfaces delete failure through backend error state', async () => {
+    const backend = createBackendMock({
+      deleteProfile: vi.fn().mockRejectedValue(new Error('delete failed')),
+    });
+
+    const { result } = renderHook(() => useProfileState({ backend }));
+
+    await act(async () => {
+      await result.current.handleDeleteProfile('sample_precision');
+    });
+
+    expect(backend.setError).toHaveBeenCalledWith('Failed to delete profile');
   });
 });

@@ -546,14 +546,10 @@ npm run tauri dev
   - `.github/workflows/desktop-ci.yml`
 - 실행 순서
   1. `npm ci`
-  2. `npm test`
-  3. `npm run build`
-  4. `SMOKE_MOCK=1 BACKEND_PORT=18081 npm run smoke:core`
+  2. `npm run verify`
 
 ### 11.4 로컬 검증 명령
 
 ```bash
-npm test
-npm run build
-npm run smoke:core
+npm run verify
 ```

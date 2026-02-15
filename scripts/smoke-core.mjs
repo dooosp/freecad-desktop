@@ -1,4 +1,3 @@
-import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { copyFile, rm, access } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -13,28 +12,51 @@ function sleep(ms) {
   return new Promise((resolveMs) => setTimeout(resolveMs, ms));
 }
 
-function sendJson(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify(body));
+function getMockHealth() {
+  return { status: 'ok', freecadRoot: '/tmp/freecad-automation-mock' };
 }
 
-function readBody(req) {
-  return new Promise((resolveBody) => {
-    let raw = '';
-    req.on('data', (chunk) => {
-      raw += chunk.toString();
-    });
-    req.on('end', () => {
-      try {
-        resolveBody(raw ? JSON.parse(raw) : {});
-      } catch {
-        resolveBody({});
-      }
-    });
-  });
+function getMockAnalyzeResult() {
+  return {
+    stages: ['create', 'drawing', 'dfm', 'cost'],
+    errors: [],
+    model: { exports: [{ format: 'step', path: 'output/mock.step' }] },
+    drawing: { drawing_paths: [{ format: 'svg', path: 'output/mock.svg' }] },
+    drawingSvg: '<svg></svg>',
+    dfm: { score: 92 },
+    cost: { unit_cost: 12345 },
+  };
+}
+
+async function mockRequest(path, { method = 'GET' } = {}) {
+  if (method === 'GET' && path === '/health') return getMockHealth();
+  if (method === 'GET' && path === '/profiles') return [{ name: '_default' }, { name: 'sample_precision' }];
+  if (method === 'POST' && path === '/dfm') return { score: 95, summary: 'mock' };
+  if (method === 'POST' && path === '/report') return { pdfBase64: Buffer.from('mock-report').toString('base64') };
+  if (method === 'POST' && path === '/export-pack') {
+    return {
+      filename: 'mock-pack.zip',
+      zipBase64: Buffer.from('mock-zip').toString('base64'),
+    };
+  }
+  if (method === 'POST' && path === '/step/import') {
+    return {
+      success: true,
+      analysis: { part_type: 'mock' },
+      tomlString: 'name = "mock_part"',
+      configPath: 'configs/imports/mock-part.toml',
+    };
+  }
+  if (method === 'POST' && path === '/step/save-config') return { success: true };
+
+  throw new Error(`mock endpoint not found: ${method} ${path}`);
 }
 
 async function request(path, { method = 'GET', body } = {}) {
+  if (isMockMode) {
+    return mockRequest(path, { method, body });
+  }
+
   const res = await fetch(`${base}${path}`, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -48,6 +70,8 @@ async function request(path, { method = 'GET', body } = {}) {
 }
 
 async function isHealthy() {
+  if (isMockMode) return true;
+
   try {
     const res = await fetch(`${base}/health`);
     return res.ok;
@@ -57,6 +81,8 @@ async function isHealthy() {
 }
 
 async function readHealth() {
+  if (isMockMode) return getMockHealth();
+
   const res = await fetch(`${base}/health`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -93,96 +119,11 @@ function startBackend() {
   };
 }
 
-async function startMockApiServer() {
-  const server = createServer(async (req, res) => {
-    const url = new URL(req.url || '/', `http://localhost:${port}`);
-
-    if (req.method === 'GET' && url.pathname === '/api/health') {
-      sendJson(res, 200, { status: 'ok', freecadRoot: '/tmp/freecad-automation-mock' });
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/profiles') {
-      sendJson(res, 200, [{ name: '_default' }, { name: 'sample_precision' }]);
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/analyze') {
-      const result = {
-        stages: ['create', 'drawing', 'dfm', 'cost'],
-        errors: [],
-        model: { exports: [{ format: 'step', path: 'output/mock.step' }] },
-        drawing: { drawing_paths: [{ format: 'svg', path: 'output/mock.svg' }] },
-        drawingSvg: '<svg></svg>',
-        dfm: { score: 92 },
-        cost: { unit_cost: 12345 },
-      };
-
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      });
-
-      const stages = ['create', 'drawing', 'dfm', 'cost'];
-      for (const stage of stages) {
-        res.write(`event: stage\ndata: ${JSON.stringify({ stage, status: 'done' })}\n\n`);
-      }
-      res.write(`event: complete\ndata: ${JSON.stringify(result)}\n\n`);
-      res.end();
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/dfm') {
-      await readBody(req);
-      sendJson(res, 200, { score: 95, summary: 'mock' });
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/report') {
-      await readBody(req);
-      sendJson(res, 200, { pdfBase64: Buffer.from('mock-report').toString('base64') });
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/export-pack') {
-      await readBody(req);
-      sendJson(res, 200, {
-        filename: 'mock-pack.zip',
-        zipBase64: Buffer.from('mock-zip').toString('base64'),
-      });
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/step/import') {
-      await readBody(req);
-      sendJson(res, 200, {
-        success: true,
-        analysis: { part_type: 'mock' },
-        tomlString: 'name = "mock_part"',
-        configPath: 'configs/imports/mock-part.toml',
-      });
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/step/save-config') {
-      await readBody(req);
-      sendJson(res, 200, { success: true });
-      return;
-    }
-
-    sendJson(res, 404, { error: 'mock endpoint not found' });
-  });
-
-  await new Promise((resolveStart, rejectStart) => {
-    server.once('error', rejectStart);
-    server.listen(port, resolveStart);
-  });
-
-  return server;
-}
-
 async function analyze(configPath) {
+  if (isMockMode) {
+    return getMockAnalyzeResult();
+  }
+
   const res = await fetch(`${base}/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -247,15 +188,12 @@ async function analyze(configPath) {
 
 const tempFiles = [];
 let ownedBackend = null;
-let ownedMockServer = null;
 
 async function main() {
   const summary = {};
 
   try {
-    if (isMockMode) {
-      ownedMockServer = await startMockApiServer();
-    } else {
+    if (!isMockMode) {
       const healthy = await isHealthy();
       if (!healthy) {
         ownedBackend = startBackend();
@@ -410,12 +348,6 @@ async function main() {
       await new Promise((resolveDone) => {
         ownedBackend.proc.once('exit', resolveDone);
         setTimeout(resolveDone, 1500);
-      });
-    }
-
-    if (ownedMockServer) {
-      await new Promise((resolveDone) => {
-        ownedMockServer.close(() => resolveDone());
       });
     }
   }
