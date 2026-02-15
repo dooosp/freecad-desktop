@@ -492,4 +492,100 @@ describe('analyze route handler', () => {
     ]);
     expect(res.ended).toBe(true);
   });
+
+  it('records tolerance stage error and still completes stream', async () => {
+    const { Cache } = makeCacheClass();
+    const handler = createAnalyzeHandler({
+      AnalysisCacheClass: Cache,
+      loadShopProfileFn: vi.fn(async () => null),
+    });
+
+    const loadConfig = vi.fn(async () => ({
+      name: 'tol_error_case',
+      shapes: [{ type: 'box' }],
+      assembly: { method: 'stack' },
+      parts: [{ id: 'A' }, { id: 'B' }],
+    }));
+    const runScript = vi.fn(async (script) => {
+      if (script === 'create_model.py') return { ok: true };
+      if (script === 'tolerance_analysis.py') throw new Error('tolerance failed');
+      throw new Error(`unexpected script: ${script}`);
+    });
+
+    const req = createMockReq({
+      body: {
+        configPath: 'configs/examples/ks_flange.toml',
+        options: {
+          drawing: false,
+          dfm: false,
+          cost: false,
+        },
+      },
+      appLocals: {
+        freecadRoot: '/tmp/freecad-root',
+        loadConfig,
+        runScript,
+      },
+    });
+    const res = createMockSseRes();
+
+    await handler(req, res);
+
+    const events = parseSseEvents(res.chunks);
+    const toleranceError = events.find(
+      (event) => event.event === 'stage' && event.data?.stage === 'tolerance' && event.data?.status === 'error'
+    );
+    expect(toleranceError?.data?.error).toBe('tolerance failed');
+
+    const complete = events.find((event) => event.event === 'complete')?.data;
+    expect(complete.stages).toEqual(['create']);
+    expect(complete.errors).toEqual([{ stage: 'tolerance', error: 'tolerance failed' }]);
+  });
+
+  it('records cost stage error and still completes stream', async () => {
+    const { Cache } = makeCacheClass();
+    const handler = createAnalyzeHandler({
+      AnalysisCacheClass: Cache,
+      loadShopProfileFn: vi.fn(async () => null),
+    });
+
+    const loadConfig = vi.fn(async () => ({
+      name: 'cost_error_case',
+      shapes: [{ type: 'box' }],
+    }));
+    const runScript = vi.fn(async (script) => {
+      if (script === 'create_model.py') return { ok: true };
+      if (script === 'cost_estimator.py') throw new Error('cost failed');
+      throw new Error(`unexpected script: ${script}`);
+    });
+
+    const req = createMockReq({
+      body: {
+        configPath: 'configs/examples/ks_flange.toml',
+        options: {
+          drawing: false,
+          dfm: false,
+          tolerance: false,
+        },
+      },
+      appLocals: {
+        freecadRoot: '/tmp/freecad-root',
+        loadConfig,
+        runScript,
+      },
+    });
+    const res = createMockSseRes();
+
+    await handler(req, res);
+
+    const events = parseSseEvents(res.chunks);
+    const costError = events.find(
+      (event) => event.event === 'stage' && event.data?.stage === 'cost' && event.data?.status === 'error'
+    );
+    expect(costError?.data?.error).toBe('cost failed');
+
+    const complete = events.find((event) => event.event === 'complete')?.data;
+    expect(complete.stages).toEqual(['create']);
+    expect(complete.errors).toEqual([{ stage: 'cost', error: 'cost failed' }]);
+  });
 });

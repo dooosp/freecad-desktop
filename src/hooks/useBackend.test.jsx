@@ -41,6 +41,10 @@ function createSseResponse(events, { ok = true, status = 200 } = {}) {
 }
 
 const originalFetch = globalThis.fetch;
+const originalAtob = globalThis.atob;
+const originalCreateObjectURL = globalThis.URL?.createObjectURL;
+const originalRevokeObjectURL = globalThis.URL?.revokeObjectURL;
+const originalCreateElement = globalThis.document?.createElement?.bind(globalThis.document);
 
 beforeEach(() => {
   globalThis.fetch = vi.fn();
@@ -48,6 +52,14 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  globalThis.atob = originalAtob;
+  if (globalThis.URL) {
+    globalThis.URL.createObjectURL = originalCreateObjectURL;
+    globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+  }
+  if (globalThis.document && originalCreateElement) {
+    globalThis.document.createElement = originalCreateElement;
+  }
 });
 
 describe('useBackend', () => {
@@ -192,5 +204,153 @@ describe('useBackend', () => {
     expect(result.current.error).toBe('bad request');
     expect(result.current.loading).toBe(false);
     expect(result.current.progress).toBe(null);
+  });
+
+  it('imports STEP in tauri path mode and web file mode', async () => {
+    globalThis.fetch
+      .mockResolvedValueOnce(createJsonResponse({ success: true, configPath: 'configs/imports/path.toml' }))
+      .mockResolvedValueOnce(createJsonResponse({ success: true, configPath: 'configs/imports/file.toml' }));
+
+    const { result } = renderHook(() => useBackend());
+
+    let first;
+    let second;
+    await act(async () => {
+      first = await result.current.importStep('/tmp/input.step');
+      const file = new File(['STEP'], 'input.step', { type: 'application/step' });
+      second = await result.current.importStep(file);
+    });
+
+    expect(first).toEqual({ success: true, configPath: 'configs/imports/path.toml' });
+    expect(second).toEqual({ success: true, configPath: 'configs/imports/file.toml' });
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/step/import',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body)).toEqual({ filePath: '/tmp/input.step' });
+
+    expect(globalThis.fetch.mock.calls[1][0]).toBe('/api/step/import');
+    expect(globalThis.fetch.mock.calls[1][1].method).toBe('POST');
+    expect(globalThis.fetch.mock.calls[1][1].body).toBeInstanceOf(FormData);
+    expect(globalThis.fetch.mock.calls[1][1].headers).toBeUndefined();
+  });
+
+  it('surfaces importStep failure through error state', async () => {
+    globalThis.fetch.mockResolvedValue(createJsonResponse({ error: 'step import failed' }, { ok: false, status: 500 }));
+    const { result } = renderHook(() => useBackend());
+
+    let caught;
+    await act(async () => {
+      try {
+        await result.current.importStep('/tmp/fail.step');
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).toBeTruthy();
+    expect(caught.message).toBe('step import failed');
+    expect(result.current.error).toBe('step import failed');
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('maps CRUD helper methods to correct API routes and verbs', async () => {
+    globalThis.fetch.mockResolvedValue(createJsonResponse({ success: true }));
+    const { result } = renderHook(() => useBackend());
+
+    await act(async () => {
+      await result.current.saveProfile({ _isNew: true, name: 'shop_a', label: 'Shop A' });
+      await result.current.saveProfile({ name: 'shop_a', label: 'Shop A2' });
+      await result.current.deleteProfile('shop_a');
+      await result.current.compareProfiles({ configPath: 'configs/examples/ks_flange.toml' });
+
+      await result.current.saveReportTemplate({ _isNew: true, name: 'tpl_a', label: 'Template A' });
+      await result.current.saveReportTemplate({ name: 'tpl_a', label: 'Template A2' });
+      await result.current.deleteReportTemplate('tpl_a');
+
+      await result.current.saveProject({ name: 'proj_a' });
+      await result.current.openProject('/tmp/proj_a.fcstudio');
+      await result.current.clearCache('drawing');
+    });
+
+    const compact = globalThis.fetch.mock.calls.map(([url, options]) => ({
+      url,
+      method: options?.method || 'GET',
+      body: options?.body ? JSON.parse(options.body) : null,
+    }));
+
+    expect(compact).toEqual([
+      { url: '/api/profiles', method: 'POST', body: { name: 'shop_a', label: 'Shop A' } },
+      { url: '/api/profiles/shop_a', method: 'PUT', body: { name: 'shop_a', label: 'Shop A2' } },
+      { url: '/api/profiles/shop_a', method: 'DELETE', body: null },
+      { url: '/api/profiles/compare', method: 'POST', body: { configPath: 'configs/examples/ks_flange.toml' } },
+      { url: '/api/report-templates', method: 'POST', body: { name: 'tpl_a', label: 'Template A' } },
+      { url: '/api/report-templates/tpl_a', method: 'PUT', body: { name: 'tpl_a', label: 'Template A2' } },
+      { url: '/api/report-templates/tpl_a', method: 'DELETE', body: null },
+      { url: '/api/project/save', method: 'POST', body: { projectData: { name: 'proj_a' } } },
+      { url: '/api/project/open', method: 'POST', body: { filePath: '/tmp/proj_a.fcstudio' } },
+      { url: '/api/cache?stage=drawing', method: 'DELETE', body: null },
+    ]);
+  });
+
+  it('downloads zip when exportPack returns base64 payload', async () => {
+    globalThis.fetch.mockResolvedValue(
+      createJsonResponse({
+        success: true,
+        filename: 'bundle.zip',
+        zipBase64: 'UEs=', // "PK"
+      })
+    );
+
+    const createObjectURL = vi.fn(() => 'blob:mock-zip');
+    const revokeObjectURL = vi.fn();
+    globalThis.URL.createObjectURL = createObjectURL;
+    globalThis.URL.revokeObjectURL = revokeObjectURL;
+    globalThis.atob = vi.fn(() => 'PK');
+
+    const click = vi.fn();
+    const realCreateElement = globalThis.document.createElement.bind(globalThis.document);
+    globalThis.document.createElement = vi.fn((tagName, options) => {
+      if (tagName !== 'a') {
+        return realCreateElement(tagName, options);
+      }
+      return {
+        click,
+        set href(value) {
+          this._href = value;
+        },
+        get href() {
+          return this._href;
+        },
+        set download(value) {
+          this._download = value;
+        },
+        get download() {
+          return this._download;
+        },
+      };
+    });
+
+    const { result } = renderHook(() => useBackend());
+
+    let exported;
+    await act(async () => {
+      exported = await result.current.exportPack({ configPath: 'configs/examples/ks_flange.toml' });
+    });
+
+    expect(exported).toMatchObject({ success: true, filename: 'bundle.zip' });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/export-pack',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(globalThis.document.createElement).toHaveBeenCalledWith('a');
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-zip');
   });
 });
