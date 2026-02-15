@@ -1,7 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const START_MARKER = '<!-- SMOKE_SUMMARY:START -->';
-const END_MARKER = '<!-- SMOKE_SUMMARY:END -->';
+export const START_MARKER = '<!-- SMOKE_SUMMARY:START -->';
+export const END_MARKER = '<!-- SMOKE_SUMMARY:END -->';
 
 const inputPath = process.env.SMOKE_SUMMARY_INPUT || 'artifacts/smoke-core-summary.json';
 const reportPath = process.env.SMOKE_REPORT_PATH || 'REPORT.md';
@@ -11,8 +13,7 @@ function listToText(list) {
   return list.join(', ');
 }
 
-function renderSummary(payload) {
-  const now = new Date().toISOString();
+export function renderSummary(payload, now = new Date().toISOString()) {
   const lines = [];
 
   lines.push(START_MARKER);
@@ -51,7 +52,7 @@ function renderSummary(payload) {
   return lines.join('\n');
 }
 
-function upsertSmokeSection(reportText, block) {
+export function upsertSmokeSection(reportText, block) {
   const hasStart = reportText.includes(START_MARKER);
   const hasEnd = reportText.includes(END_MARKER);
 
@@ -67,7 +68,7 @@ function upsertSmokeSection(reportText, block) {
   return `${reportText.trimEnd()}${section}\n`;
 }
 
-async function main() {
+export async function main() {
   const raw = await readFile(inputPath, 'utf8');
   const payload = JSON.parse(raw);
   const reportText = await readFile(reportPath, 'utf8');
@@ -77,4 +78,6 @@ async function main() {
   console.log(`Updated ${reportPath} using ${inputPath}`);
 }
 
-await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}
