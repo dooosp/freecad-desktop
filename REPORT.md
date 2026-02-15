@@ -560,6 +560,9 @@ npm run tauri dev
   - `backend/lib/pack-builder.test.js` (buildPack 경로 포함)
 - 컨텍스트 통합 회귀 테스트 추가
   - `src/components/appShell.integration.test.jsx`
+- 앱 루트 조합 회귀 테스트 추가
+  - `src/App.test.jsx`
+  - App shell 조합, 진행바/에러바 표시 조건, Dismiss 동작 검증
 - UI 컴포넌트 단위 테스트 확장
   - `src/components/FileDropZone.test.jsx`
   - `src/components/ProgressBar.test.jsx`
@@ -585,6 +588,8 @@ npm run tauri dev
 - 모달 조합 컴포넌트 테스트 확장
   - `src/components/modals/ProjectFlowModals.test.jsx`
   - `src/components/modals/AnalysisFlowModals.test.jsx`
+- 커버리지 집계 예외 정리
+  - `src/contracts/**` 제외 (JSDoc typedef 중심 계약 파일로 런타임 라인 미생성)
 
 ### 11.2 자동 스모크 검증
 
