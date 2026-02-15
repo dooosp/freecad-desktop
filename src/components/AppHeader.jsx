@@ -1,16 +1,10 @@
 import React from 'react';
+import { useAppShell } from '../contexts/AppShellContext.jsx';
 
-/** @param {import('../contracts/appShellContracts.js').AppHeaderProps} props */
-export default function AppHeader({
-  backend,
-  configPath,
-  results,
-  onOpenProject,
-  onSaveProject,
-  onAnalyze,
-  onOpenReportConfig,
-  onOpenExportPack,
-}) {
+export default function AppHeader() {
+  /** @type {import('../contracts/appShellContracts.js').AppShellContextValue} */
+  const { backend, projectState, modalState } = useAppShell();
+
   return (
     <header className="header">
       <div className="header-left">
@@ -20,15 +14,15 @@ export default function AppHeader({
         <button
           className="btn btn-secondary"
           disabled={backend.loading}
-          onClick={onOpenProject}
+          onClick={projectState.handleOpenProject}
           title="Open recent project"
         >
           Open
         </button>
         <button
           className="btn btn-secondary"
-          disabled={!configPath || backend.loading}
-          onClick={onSaveProject}
+          disabled={!projectState.configPath || backend.loading}
+          onClick={projectState.handleSaveProject}
           title="Save project"
         >
           Save
@@ -40,22 +34,22 @@ export default function AppHeader({
         )}
         <button
           className="btn btn-primary"
-          disabled={!configPath || backend.loading}
-          onClick={onAnalyze}
+          disabled={!projectState.configPath || backend.loading}
+          onClick={projectState.handleAnalyze}
         >
           {backend.loading ? 'Analyzing...' : 'Analyze'}
         </button>
         <button
           className="btn btn-secondary"
-          disabled={!results || backend.loading}
-          onClick={onOpenReportConfig}
+          disabled={!projectState.results || backend.loading}
+          onClick={modalState.openReportModal}
         >
           Report
         </button>
         <button
           className="btn btn-secondary"
-          disabled={!configPath || backend.loading}
-          onClick={onOpenExportPack}
+          disabled={!projectState.configPath || backend.loading}
+          onClick={modalState.openExportModal}
         >
           Export Pack
         </button>
