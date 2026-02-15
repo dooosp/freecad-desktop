@@ -547,10 +547,12 @@ npm run tauri dev
 - 실행 순서
   1. `npm ci`
   2. `npm run verify`
+  3. `npm run test:coverage` (coverage artifact 업로드)
 
 ### 11.4 로컬 검증 명령
 
 ```bash
 npm run verify
+npm run test:coverage
 npm run ci:status   # gh 로그인/네트워크 가능 환경에서 CI 상태 확인
 ```
