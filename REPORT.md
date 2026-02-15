@@ -536,7 +536,7 @@ npm run tauri dev
 - 핵심 기능 스모크 스크립트
   - `scripts/smoke-core.mjs`
 - 검증 대상
-  - Analyze / Rerun / Profile / Report / Export / STEP
+  - Analyze(+DXF) / Rerun / Profile / Profile Compare / Report / Template CRUD / Export / STEP
 - CI 환경에서 `SMOKE_MOCK=1` 모드 지원
   - FreeCAD 런타임이 없는 환경에서도 API 플로우 회귀 검증 가능
 

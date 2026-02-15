@@ -7,6 +7,7 @@ const base = `http://localhost:${port}/api`;
 const fallbackFreecadRoot = '/home/taeho/freecad-automation';
 const isMockMode = process.env.SMOKE_MOCK === '1';
 let freecadRoot = process.env.FREECAD_ROOT || fallbackFreecadRoot;
+const mockTemplates = new Map();
 
 function sleep(ms) {
   return new Promise((resolveMs) => setTimeout(resolveMs, ms));
@@ -21,22 +22,65 @@ function getMockAnalyzeResult() {
     stages: ['create', 'drawing', 'dfm', 'cost'],
     errors: [],
     model: { exports: [{ format: 'step', path: 'output/mock.step' }] },
-    drawing: { drawing_paths: [{ format: 'svg', path: 'output/mock.svg' }] },
+    drawing: {
+      drawing_paths: [
+        { format: 'svg', path: 'output/mock.svg' },
+        { format: 'dxf', path: 'output/mock-front.dxf' },
+        { format: 'pdf', path: 'output/mock-drawing.pdf' },
+      ],
+    },
     drawingSvg: '<svg></svg>',
     dfm: { score: 92 },
     cost: { unit_cost: 12345 },
   };
 }
 
-async function mockRequest(path, { method = 'GET' } = {}) {
+async function mockRequest(path, { method = 'GET', body = {} } = {}) {
   if (method === 'GET' && path === '/health') return getMockHealth();
   if (method === 'GET' && path === '/profiles') return [{ name: '_default' }, { name: 'sample_precision' }];
+  if (method === 'POST' && path === '/profiles/compare') {
+    return {
+      profileA: { name: body.profileA || '_default', dfm: { score: 90 }, cost: { unit_cost: 10000 } },
+      profileB: { name: body.profileB || 'sample_precision', dfm: { score: 95 }, cost: { unit_cost: 12000 } },
+    };
+  }
   if (method === 'POST' && path === '/dfm') return { score: 95, summary: 'mock' };
   if (method === 'POST' && path === '/report') return { pdfBase64: Buffer.from('mock-report').toString('base64') };
+  if (method === 'GET' && path === '/report-templates') {
+    const custom = [...mockTemplates.values()].map((tpl) => ({
+      name: tpl.name,
+      label: tpl.label || tpl.name,
+      description: tpl.description || '',
+    }));
+    return [{ name: '_default', label: 'Default', description: '' }, ...custom];
+  }
+  if (method === 'GET' && path.startsWith('/report-templates/')) {
+    const name = decodeURIComponent(path.split('/').pop() || '');
+    const tpl = mockTemplates.get(name);
+    if (!tpl) throw new Error(`${path} failed: Template not found`);
+    return { ...tpl };
+  }
+  if (method === 'POST' && path === '/report-templates') {
+    const now = new Date().toISOString();
+    const tpl = { ...body, created: now, updated: now };
+    mockTemplates.set(body.name, tpl);
+    return { success: true, name: body.name };
+  }
+  if (method === 'PUT' && path.startsWith('/report-templates/')) {
+    const name = decodeURIComponent(path.split('/').pop() || '');
+    const current = mockTemplates.get(name) || { name };
+    mockTemplates.set(name, { ...current, ...body, name, updated: new Date().toISOString() });
+    return { success: true };
+  }
+  if (method === 'DELETE' && path.startsWith('/report-templates/')) {
+    const name = decodeURIComponent(path.split('/').pop() || '');
+    mockTemplates.delete(name);
+    return { success: true };
+  }
   if (method === 'POST' && path === '/export-pack') {
     return {
       filename: 'mock-pack.zip',
-      zipBase64: Buffer.from('mock-zip').toString('base64'),
+      zipBase64: Buffer.from('mock-zip 02_drawing/mock-front.dxf').toString('base64'),
     };
   }
   if (method === 'POST' && path === '/step/import') {
@@ -119,6 +163,61 @@ function startBackend() {
   };
 }
 
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function findEndOfCentralDirectory(zipBuffer) {
+  const EOCD_SIGNATURE = 0x06054b50;
+  for (let i = zipBuffer.length - 22; i >= 0; i -= 1) {
+    if (zipBuffer.readUInt32LE(i) === EOCD_SIGNATURE) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function listZipEntries(zipBase64) {
+  if (!zipBase64) return [];
+  const zipBuffer = Buffer.from(zipBase64, 'base64');
+  const eocdOffset = findEndOfCentralDirectory(zipBuffer);
+  if (eocdOffset < 0) return [];
+
+  const totalEntries = zipBuffer.readUInt16LE(eocdOffset + 10);
+  const centralDirectoryOffset = zipBuffer.readUInt32LE(eocdOffset + 16);
+  const CENTRAL_HEADER_SIGNATURE = 0x02014b50;
+  const entries = [];
+
+  let ptr = centralDirectoryOffset;
+  for (let i = 0; i < totalEntries && ptr + 46 <= zipBuffer.length; i += 1) {
+    if (zipBuffer.readUInt32LE(ptr) !== CENTRAL_HEADER_SIGNATURE) break;
+    const flags = zipBuffer.readUInt16LE(ptr + 8);
+    const fileNameLength = zipBuffer.readUInt16LE(ptr + 28);
+    const extraLength = zipBuffer.readUInt16LE(ptr + 30);
+    const commentLength = zipBuffer.readUInt16LE(ptr + 32);
+    const fileNameStart = ptr + 46;
+    const fileNameEnd = fileNameStart + fileNameLength;
+    if (fileNameEnd > zipBuffer.length) break;
+
+    const encoding = (flags & 0x800) ? 'utf8' : 'latin1';
+    entries.push(zipBuffer.toString(encoding, fileNameStart, fileNameEnd));
+    ptr = fileNameEnd + extraLength + commentLength;
+  }
+
+  return entries;
+}
+
+function hasDxfEntry(zipBase64) {
+  const entries = listZipEntries(zipBase64);
+  if (entries.length > 0) {
+    return entries.some((entry) => entry.toLowerCase().endsWith('.dxf'));
+  }
+  const raw = Buffer.from(zipBase64 || '', 'base64').toString('latin1').toLowerCase();
+  return raw.includes('.dxf');
+}
+
 async function analyze(configPath) {
   if (isMockMode) {
     return getMockAnalyzeResult();
@@ -132,6 +231,7 @@ async function analyze(configPath) {
       options: {
         dfm: true,
         drawing: true,
+        dxfExport: true,
         tolerance: true,
         cost: true,
         process: 'machining',
@@ -213,16 +313,87 @@ async function main() {
       count: Array.isArray(profiles) ? profiles.length : 0,
       hasDefault: Array.isArray(profiles) ? profiles.some((p) => p.name === '_default') : false,
     };
+    assert(summary.profile.count >= 2, 'profile smoke requires at least 2 profiles');
 
     const analysis = await analyze(configPath);
+    const drawingFormats = Array.isArray(analysis?.drawing?.drawing_paths)
+      ? analysis.drawing.drawing_paths.map((entry) => entry?.format).filter(Boolean)
+      : [];
     summary.analyze = {
       stages: analysis.stages || [],
       hasModel: Boolean(analysis.model),
       hasDrawing: Boolean(analysis.drawing),
+      hasDxf: drawingFormats.includes('dxf'),
       hasDfm: Boolean(analysis.dfm),
       hasCost: Boolean(analysis.cost),
       errors: Array.isArray(analysis.errors) ? analysis.errors.length : 0,
     };
+    assert(summary.analyze.hasDxf, 'analyze smoke missing DXF output');
+
+    const [profileA, profileB] = profiles.slice(0, 2).map((p) => p.name);
+    const profileCompare = await request('/profiles/compare', {
+      method: 'POST',
+      body: {
+        configPath,
+        profileA,
+        profileB,
+        options: {
+          process: 'machining',
+          material: 'SS304',
+          batch: 100,
+        },
+      },
+    });
+    summary.profileCompare = {
+      success: Boolean(profileCompare?.profileA && profileCompare?.profileB),
+      profileA: profileCompare?.profileA?.name || null,
+      profileB: profileCompare?.profileB?.name || null,
+      scoreA: profileCompare?.profileA?.dfm?.score ?? null,
+      scoreB: profileCompare?.profileB?.dfm?.score ?? null,
+    };
+    assert(summary.profileCompare.success, 'profile compare smoke failed');
+
+    const smokeTemplateName = `smoke_template_${Date.now()}`;
+    const smokeTemplatePath = resolve(freecadRoot, 'configs', 'report-templates', `${smokeTemplateName}.json`);
+    if (!isMockMode) {
+      tempFiles.push(smokeTemplatePath);
+    }
+    await request('/report-templates', {
+      method: 'POST',
+      body: {
+        name: smokeTemplateName,
+        label: 'Smoke Template',
+        description: 'Smoke test template',
+        language: 'ko',
+        sections: {
+          model_summary: { enabled: true, order: 1 },
+          drawing: { enabled: true, order: 2 },
+          dfm: { enabled: true, order: 3 },
+          cost: { enabled: true, order: 4 },
+        },
+      },
+    });
+    const fetchedTemplate = await request(`/report-templates/${smokeTemplateName}`);
+    await request(`/report-templates/${smokeTemplateName}`, {
+      method: 'PUT',
+      body: {
+        description: 'Smoke template updated',
+      },
+    });
+    const templateList = await request('/report-templates');
+    await request(`/report-templates/${smokeTemplateName}`, { method: 'DELETE' });
+    const templateListAfterDelete = await request('/report-templates');
+    summary.templateCrud = {
+      success: false,
+      createdName: smokeTemplateName,
+      fetched: fetchedTemplate?.name === smokeTemplateName,
+      listed: Array.isArray(templateList) && templateList.some((t) => t.name === smokeTemplateName),
+      deleted: Array.isArray(templateListAfterDelete) && !templateListAfterDelete.some((t) => t.name === smokeTemplateName),
+    };
+    summary.templateCrud.success = summary.templateCrud.fetched && summary.templateCrud.listed && summary.templateCrud.deleted;
+    assert(summary.templateCrud.fetched, 'template CRUD smoke failed to fetch created template');
+    assert(summary.templateCrud.listed, 'template CRUD smoke failed to list created template');
+    assert(summary.templateCrud.deleted, 'template CRUD smoke failed to delete template');
 
     const rerun = await request('/dfm', {
       method: 'POST',
@@ -278,7 +449,7 @@ async function main() {
         include: {
           step: true,
           svg: true,
-          dxf: false,
+          dxf: true,
           drawing_pdf: true,
           dfm: true,
           tolerance: false,
@@ -294,7 +465,9 @@ async function main() {
       success: Boolean(exported),
       filename: exported?.filename || null,
       zipBytes: exported?.zipBase64 ? Buffer.from(exported.zipBase64, 'base64').length : 0,
+      hasDxfEntry: hasDxfEntry(exported?.zipBase64),
     };
+    assert(summary.exportPack.hasDxfEntry, 'export pack smoke missing DXF file');
 
     let stepImportPath = '/tmp/mock.step';
     if (!isMockMode) {
