@@ -21,7 +21,10 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.2.0",
+    "archiver": "^7.0.1",
     "chart.js": "^4.4.7",
+    "express": "^5.2.1",
+    "multer": "^2.0.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.172.0"
