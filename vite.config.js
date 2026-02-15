@@ -40,7 +40,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    include: ['src/**/*.test.{js,jsx}'],
+    include: ['src/**/*.test.{js,jsx}', 'backend/**/*.test.{js,jsx}'],
     clearMocks: true,
     restoreMocks: true,
     coverage: {

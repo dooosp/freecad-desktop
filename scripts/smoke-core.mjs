@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
-import { copyFile, rm, access } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { copyFile, rm, access, mkdir, writeFile } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
 
 const port = Number(process.env.BACKEND_PORT || 18080);
 const base = `http://localhost:${port}/api`;
@@ -8,6 +8,7 @@ const fallbackFreecadRoot = '/home/taeho/freecad-automation';
 const isMockMode = process.env.SMOKE_MOCK === '1';
 let freecadRoot = process.env.FREECAD_ROOT || fallbackFreecadRoot;
 const mockTemplates = new Map();
+const smokeOutputPath = process.env.SMOKE_OUTPUT || '';
 
 function sleep(ms) {
   return new Promise((resolveMs) => setTimeout(resolveMs, ms));
@@ -216,6 +217,12 @@ function hasDxfEntry(zipBase64) {
   }
   const raw = Buffer.from(zipBase64 || '', 'base64').toString('latin1').toLowerCase();
   return raw.includes('.dxf');
+}
+
+async function persistSmokeResult(payload) {
+  if (!smokeOutputPath) return;
+  await mkdir(dirname(smokeOutputPath), { recursive: true });
+  await writeFile(smokeOutputPath, JSON.stringify(payload, null, 2), 'utf8');
 }
 
 async function analyze(configPath) {
@@ -503,15 +510,19 @@ async function main() {
       hasAnalysis: Boolean(step?.analysis),
     };
 
-    console.log(JSON.stringify({ ok: true, summary }, null, 2));
+    const payload = { ok: true, summary };
+    await persistSmokeResult(payload);
+    console.log(JSON.stringify(payload, null, 2));
   } catch (error) {
     const backendLogs = ownedBackend?.getLogs?.() || undefined;
-    console.error(JSON.stringify({
+    const payload = {
       ok: false,
       error: error.message,
       backendLogs: backendLogs?.trim() || undefined,
       mode: isMockMode ? 'mock' : 'real',
-    }, null, 2));
+    };
+    await persistSmokeResult(payload);
+    console.error(JSON.stringify(payload, null, 2));
     process.exitCode = 1;
   } finally {
     await Promise.allSettled(tempFiles.map((p) => rm(p, { force: true })));

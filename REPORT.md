@@ -548,6 +548,7 @@ npm run tauri dev
   1. `npm ci`
   2. `npm run verify`
   3. `npm run test:coverage` (coverage artifact 업로드)
+  4. `smoke-core-summary` artifact 업로드 (mock smoke JSON 결과)
 
 ### 11.4 로컬 검증 명령
 
