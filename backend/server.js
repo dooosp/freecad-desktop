@@ -149,6 +149,7 @@ export async function startBackendServer({
   loadConfig,
   deepMerge,
   routers,
+  createServerFn = createServer,
 } = {}) {
   const app = await createBackendApp({
     freecadRoot,
@@ -159,7 +160,7 @@ export async function startBackendServer({
     logger,
   });
 
-  const server = createServer(app);
+  const server = createServerFn(app);
   await new Promise((resolveListen) => {
     server.listen(port, resolveListen);
   });

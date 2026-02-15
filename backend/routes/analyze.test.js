@@ -1,5 +1,8 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAnalyzeHandler } from './handlers/analyze-handler.js';
 import { createMockReq } from './handler-test-helpers.js';
 
@@ -77,6 +80,12 @@ function makeCacheClass() {
 
   return { Cache, ctor, getCacheKey, checkCache, storeCache };
 }
+
+const tempRoots = [];
+
+afterEach(async () => {
+  await Promise.allSettled(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
 
 describe('analyze route handler', () => {
   it('returns 400 json when configPath is missing', async () => {
@@ -587,5 +596,131 @@ describe('analyze route handler', () => {
     const complete = events.find((event) => event.event === 'complete')?.data;
     expect(complete.stages).toEqual(['create']);
     expect(complete.errors).toEqual([{ stage: 'cost', error: 'cost failed' }]);
+  });
+
+  it('emits create error when config has no shapes/parts and no step source', async () => {
+    const { Cache } = makeCacheClass();
+    const handler = createAnalyzeHandler({
+      AnalysisCacheClass: Cache,
+      loadShopProfileFn: vi.fn(async () => null),
+    });
+
+    const req = createMockReq({
+      body: {
+        configPath: 'configs/examples/invalid.toml',
+        options: {},
+      },
+      appLocals: {
+        freecadRoot: '/tmp/freecad-root',
+        loadConfig: vi.fn(async () => ({ name: 'empty' })),
+        runScript: vi.fn(),
+      },
+    });
+    const res = createMockSseRes();
+
+    await handler(req, res);
+
+    const events = parseSseEvents(res.chunks);
+    expect(events[1]).toMatchObject({
+      event: 'stage',
+      data: {
+        stage: 'create',
+        status: 'error',
+        error: 'Config has no shapes/parts. Define geometry before Analyze.',
+      },
+    });
+  });
+
+  it('records dfm stage error and keeps stream alive for cost stage', async () => {
+    const { Cache } = makeCacheClass();
+    const handler = createAnalyzeHandler({
+      AnalysisCacheClass: Cache,
+      loadShopProfileFn: vi.fn(async () => null),
+    });
+
+    const loadConfig = vi.fn(async () => ({
+      name: 'dfm_error_case',
+      shapes: [{ type: 'box' }],
+    }));
+    const runScript = vi.fn(async (script) => {
+      if (script === 'create_model.py') return { ok: true };
+      if (script === 'dfm_checker.py') throw new Error('dfm failed');
+      if (script === 'cost_estimator.py') return { unit_cost: 42 };
+      throw new Error(`unexpected script: ${script}`);
+    });
+
+    const req = createMockReq({
+      body: {
+        configPath: 'configs/examples/ks_flange.toml',
+        options: { drawing: false, tolerance: false },
+      },
+      appLocals: {
+        freecadRoot: '/tmp/freecad-root',
+        loadConfig,
+        runScript,
+      },
+    });
+    const res = createMockSseRes();
+
+    await handler(req, res);
+
+    const events = parseSseEvents(res.chunks);
+    const dfmError = events.find(
+      (event) => event.event === 'stage' && event.data?.stage === 'dfm' && event.data?.status === 'error'
+    );
+    expect(dfmError?.data?.error).toBe('dfm failed');
+
+    const complete = events.find((event) => event.event === 'complete')?.data;
+    expect(complete.errors).toContainEqual({ stage: 'dfm', error: 'dfm failed' });
+    expect(complete.cost).toEqual({ unit_cost: 42 });
+  });
+
+  it('uses default toWSL helper import for windows step-direct source', async () => {
+    const freecadRoot = await mkdtemp(join(tmpdir(), 'analyze-handler-paths-'));
+    tempRoots.push(freecadRoot);
+    await mkdir(join(freecadRoot, 'lib'), { recursive: true });
+    await writeFile(
+      join(freecadRoot, 'lib', 'paths.js'),
+      'export function toWSL(path){ return `/converted/${path.replace(/\\\\\\\\/g, "/")}`; }\n',
+      'utf8'
+    );
+
+    const copyFileFn = vi.fn(async () => undefined);
+    const handler = createAnalyzeHandler({
+      AnalysisCacheClass: makeCacheClass().Cache,
+      loadShopProfileFn: vi.fn(async () => null),
+      copyFileFn,
+      mkdirFn: vi.fn(async () => undefined),
+    });
+
+    const req = createMockReq({
+      body: {
+        configPath: 'configs/imports/win.toml',
+        options: { drawing: false, dfm: false, tolerance: false, cost: false },
+      },
+      appLocals: {
+        freecadRoot,
+        loadConfig: vi.fn(async () => ({
+          import: {
+            source_step: 'C:\\work\\part.step',
+            name: 'converted',
+          },
+        })),
+        runScript: vi.fn(async (script) => {
+          if (script === 'inspect_model.py') return { model: { faces: 10 } };
+          throw new Error(`unexpected script: ${script}`);
+        }),
+      },
+    });
+    const res = createMockSseRes();
+
+    await handler(req, res);
+
+    expect(copyFileFn).toHaveBeenCalledWith(
+      '/converted/C:\\work\\part.step',
+      `${freecadRoot}/output/converted.step`
+    );
+    const complete = parseSseEvents(res.chunks).find((event) => event.event === 'complete')?.data;
+    expect(complete.model?.stepDirect).toBe(true);
   });
 });

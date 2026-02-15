@@ -1,10 +1,16 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CURATED_EXAMPLES,
   createBackendApp,
   createCorsMiddleware,
   createErrorMiddleware,
+  loadBackendDeps,
+  loadRouteModules,
+  startBackendServer,
 } from './server.js';
 
 function createMockRes() {
@@ -53,6 +59,12 @@ function createNoopRouters() {
   };
 }
 
+const tempRoots = [];
+
+afterEach(async () => {
+  await Promise.allSettled(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
 describe('server bootstrap helpers', () => {
   it('applies CORS headers and handles OPTIONS short-circuit', () => {
     const cors = createCorsMiddleware();
@@ -67,6 +79,17 @@ describe('server bootstrap helpers', () => {
     expect(res.headers['Access-Control-Allow-Methods']).toBe('GET,POST,PUT,DELETE,OPTIONS');
     expect(res.sentStatus).toBe(200);
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('calls next for non-OPTIONS requests in CORS middleware', () => {
+    const cors = createCorsMiddleware();
+    const req = { method: 'POST' };
+    const res = createMockRes();
+    const next = vi.fn();
+
+    cors(req, res, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.sentStatus).toBe(null);
   });
 
   it('creates error middleware that logs and returns json payload', () => {
@@ -152,5 +175,64 @@ describe('server bootstrap helpers', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(runScript).toHaveBeenCalledWith('create_model.py', { config: 'x' }, { timeout: 120_000 });
     expect(createRes.jsonBody).toEqual({ script: 'create_model.py', ok: true });
+  });
+
+  it('loads backend deps from a provided freecad root', async () => {
+    const freecadRoot = await mkdtemp(join(tmpdir(), 'server-deps-'));
+    tempRoots.push(freecadRoot);
+    await mkdir(join(freecadRoot, 'lib'), { recursive: true });
+
+    await writeFile(
+      join(freecadRoot, 'lib', 'runner.js'),
+      'export async function runScript(name,input){ return { from: "runner", name, input }; }\n',
+      'utf8'
+    );
+    await writeFile(
+      join(freecadRoot, 'lib', 'config-loader.js'),
+      'export async function loadConfig(path){ return { from: "loader", path }; }\nexport function deepMerge(a,b){ return { ...a, ...b, merged: true }; }\n',
+      'utf8'
+    );
+
+    const deps = await loadBackendDeps(freecadRoot);
+    expect(await deps.runScript('x.py', { a: 1 })).toEqual({ from: 'runner', name: 'x.py', input: { a: 1 } });
+    expect(await deps.loadConfig('cfg.toml')).toEqual({ from: 'loader', path: 'cfg.toml' });
+    expect(deps.deepMerge({ a: 1 }, { b: 2 })).toEqual({ a: 1, b: 2, merged: true });
+  });
+
+  it('loads route modules and starts backend server via injected createServer', async () => {
+    const modules = await loadRouteModules();
+    expect(modules.analyzeRouter).toBeTruthy();
+    expect(modules.profileRouter).toBeTruthy();
+    expect(modules.reportTemplateRouter).toBeTruthy();
+
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const fakeServer = {
+      listening: false,
+      listen: vi.fn((_port, cb) => {
+        fakeServer.listening = true;
+        cb();
+      }),
+      close: vi.fn((cb) => {
+        fakeServer.listening = false;
+        cb?.();
+      }),
+    };
+    const createServerFn = vi.fn(() => fakeServer);
+
+    const { server } = await startBackendServer({
+      port: 0,
+      freecadRoot: '/tmp/freecad-root',
+      logger,
+      runScript: async () => ({}),
+      loadConfig: async () => ({}),
+      deepMerge: (a, b) => ({ ...a, ...b }),
+      routers: createNoopRouters(),
+      createServerFn,
+    });
+
+    expect(server.listening).toBe(true);
+    expect(createServerFn).toHaveBeenCalledTimes(1);
+    expect(fakeServer.listen).toHaveBeenCalledTimes(1);
+    expect(logger.log).toHaveBeenCalledTimes(1);
   });
 });

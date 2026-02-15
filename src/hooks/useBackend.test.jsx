@@ -298,6 +298,114 @@ describe('useBackend', () => {
     ]);
   });
 
+  it('calls pipeline and utility helpers with expected API payloads', async () => {
+    globalThis.fetch.mockResolvedValue(createJsonResponse({ success: true }));
+    const { result } = renderHook(() => useBackend());
+
+    await act(async () => {
+      await result.current.inspect({ file: 'a.step' });
+      await result.current.create({ configPath: 'configs/examples/ks_flange.toml' });
+      await result.current.runDfm('configs/examples/ks_flange.toml', 'machining', 'sample_precision', 'KS');
+      await result.current.runDrawing('configs/examples/ks_flange.toml', 'ks_standard', 'ASME');
+      await result.current.runTolerance('configs/examples/ks_flange.toml', 'KS');
+      await result.current.runCost('configs/examples/ks_flange.toml', { process: 'machining', batchSize: 5 });
+      await result.current.generateReport('configs/examples/ks_flange.toml', {
+        analysisResults: { dfm: { score: 90 } },
+        templateName: 'tpl_a',
+        profileName: 'sample_precision',
+        metadata: { part_name: 'PartA' },
+        sections: { drawing: true },
+        options: { language: 'ko' },
+      });
+      await result.current.saveStepConfig('configs/imports/a.toml', 'name = "a"\n');
+
+      await result.current.getExamples();
+      await result.current.getProfiles();
+      await result.current.getProfile('sample_precision');
+      await result.current.getReportTemplates();
+      await result.current.getReportTemplate('tpl_a');
+      await result.current.getRecentProjects();
+      await result.current.getDiagnostics();
+      await result.current.getCacheStats();
+
+      await result.current.saveProject({ name: 'proj_a' });
+      await result.current.openProject('/tmp/proj_a.fcstudio');
+      await result.current.clearCache();
+    });
+
+    const compact = globalThis.fetch.mock.calls.map(([url, options]) => ({
+      url,
+      method: options?.method || 'GET',
+      body: options?.body ? JSON.parse(options.body) : null,
+    }));
+
+    expect(compact).toEqual([
+      { url: '/api/inspect', method: 'POST', body: { file: 'a.step' } },
+      { url: '/api/create', method: 'POST', body: { configPath: 'configs/examples/ks_flange.toml' } },
+      {
+        url: '/api/dfm',
+        method: 'POST',
+        body: {
+          configPath: 'configs/examples/ks_flange.toml',
+          process: 'machining',
+          profileName: 'sample_precision',
+          standard: 'KS',
+        },
+      },
+      {
+        url: '/api/drawing',
+        method: 'POST',
+        body: {
+          configPath: 'configs/examples/ks_flange.toml',
+          preset: 'ks_standard',
+          standard: 'ASME',
+        },
+      },
+      {
+        url: '/api/tolerance',
+        method: 'POST',
+        body: { configPath: 'configs/examples/ks_flange.toml', standard: 'KS' },
+      },
+      {
+        url: '/api/cost',
+        method: 'POST',
+        body: { configPath: 'configs/examples/ks_flange.toml', process: 'machining', batchSize: 5 },
+      },
+      {
+        url: '/api/report',
+        method: 'POST',
+        body: {
+          configPath: 'configs/examples/ks_flange.toml',
+          analysisResults: { dfm: { score: 90 } },
+          templateName: 'tpl_a',
+          profileName: 'sample_precision',
+          metadata: { part_name: 'PartA' },
+          sections: { drawing: true },
+          options: { language: 'ko' },
+        },
+      },
+      {
+        url: '/api/step/save-config',
+        method: 'POST',
+        body: {
+          configPath: 'configs/imports/a.toml',
+          tomlString: 'name = "a"\n',
+        },
+      },
+      { url: '/api/examples', method: 'GET', body: null },
+      { url: '/api/profiles', method: 'GET', body: null },
+      { url: '/api/profiles/sample_precision', method: 'GET', body: null },
+      { url: '/api/report-templates', method: 'GET', body: null },
+      { url: '/api/report-templates/tpl_a', method: 'GET', body: null },
+      { url: '/api/project/recent', method: 'GET', body: null },
+      { url: '/api/diagnostics', method: 'GET', body: null },
+      { url: '/api/cache/stats', method: 'GET', body: null },
+      { url: '/api/project/save', method: 'POST', body: { projectData: { name: 'proj_a' } } },
+      { url: '/api/project/open', method: 'POST', body: { filePath: '/tmp/proj_a.fcstudio' } },
+      { url: '/api/cache', method: 'DELETE', body: null },
+    ]);
+  });
+
   it('downloads zip when exportPack returns base64 payload', async () => {
     globalThis.fetch.mockResolvedValue(
       createJsonResponse({

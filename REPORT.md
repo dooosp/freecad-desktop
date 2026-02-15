@@ -545,6 +545,7 @@ npm run tauri dev
   - `backend/routes/analyze.test.js`
   - `backend/routes/profile.route.test.js`
   - `backend/routes/report.route.test.js`
+  - `backend/routes/router-contracts.test.js`
   - `backend/server.test.js`
 - 컨텍스트 통합 회귀 테스트 추가
   - `src/components/appShell.integration.test.jsx`
