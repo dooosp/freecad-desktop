@@ -279,4 +279,217 @@ describe('analyze route handler', () => {
     expect(complete.cost).toEqual({ unit_cost: 77 });
     expect(res.ended).toBe(true);
   });
+
+  it('handles step-direct windows path and reports drawing unsupported error', async () => {
+    const { Cache } = makeCacheClass();
+    const toWSLPathFn = vi.fn(async () => '/mnt/c/tmp/imported.step');
+    const copyFileFn = vi.fn(async () => {
+      throw new Error('copy failed');
+    });
+
+    const handler = createAnalyzeHandler({
+      AnalysisCacheClass: Cache,
+      loadShopProfileFn: vi.fn(async () => null),
+      toWSLPathFn,
+      copyFileFn,
+      mkdirFn: vi.fn(async () => undefined),
+    });
+
+    const loadConfig = vi.fn(async () => ({
+      import: {
+        source_step: 'C:\\tmp\\imported.step',
+        name: 'imported_win',
+      },
+    }));
+    const runScript = vi.fn(async (script) => {
+      if (script === 'inspect_model.py') return { model: { volume: 1.2 } };
+      if (script === 'dfm_checker.py') return { score: 80 };
+      if (script === 'cost_estimator.py') return { unit_cost: 100 };
+      throw new Error(`unexpected script: ${script}`);
+    });
+
+    const req = createMockReq({
+      body: {
+        configPath: 'configs/imports/imported.toml',
+        options: {},
+      },
+      appLocals: {
+        freecadRoot: '/tmp/freecad-root',
+        loadConfig,
+        runScript,
+      },
+    });
+    const res = createMockSseRes();
+
+    await handler(req, res);
+
+    expect(toWSLPathFn).toHaveBeenCalledWith('/tmp/freecad-root', 'C:\\tmp\\imported.step');
+    expect(copyFileFn).toHaveBeenCalledWith(
+      '/mnt/c/tmp/imported.step',
+      '/tmp/freecad-root/output/imported_win.step'
+    );
+
+    const events = parseSseEvents(res.chunks);
+    const createDone = events.find(
+      (event) => event.event === 'stage' && event.data?.stage === 'create' && event.data?.status === 'done'
+    );
+    expect(createDone?.data?.stepDirect).toBe(true);
+
+    const drawingError = events.find(
+      (event) => event.event === 'stage' && event.data?.stage === 'drawing' && event.data?.status === 'error'
+    );
+    expect(drawingError?.data?.error).toMatch(/not available for STEP template-only configs/i);
+
+    const complete = events.find((event) => event.event === 'complete')?.data;
+    expect(complete.stages).toEqual(['create', 'dfm', 'cost']);
+    expect(complete.errors).toEqual([
+      {
+        stage: 'drawing',
+        error: 'Drawing generation is not available for STEP template-only configs. Add [[shapes]] or [[parts]] before generating drawing.',
+      },
+    ]);
+  });
+
+  it('uses cached entries for all stages without invoking scripts', async () => {
+    const { Cache, checkCache, storeCache } = makeCacheClass();
+    checkCache
+      .mockResolvedValueOnce({ hit: true, entry: { result: { model_path: 'output/cached.step' } } })
+      .mockResolvedValueOnce({
+        hit: true,
+        entry: { result: { drawing: { drawing_paths: [{ format: 'svg', path: 'output/cached.svg' }] }, drawingSvg: '<svg cached />', qa: { score: 99 } } },
+      })
+      .mockResolvedValueOnce({ hit: true, entry: { result: { score: 95 } } })
+      .mockResolvedValueOnce({ hit: true, entry: { result: { status: 'tol-cached' } } })
+      .mockResolvedValueOnce({ hit: true, entry: { result: { unit_cost: 777 } } });
+
+    const handler = createAnalyzeHandler({
+      AnalysisCacheClass: Cache,
+      loadShopProfileFn: vi.fn(async () => ({ cap: true })),
+    });
+
+    const loadConfig = vi.fn(async () => ({
+      name: 'cached_part',
+      shapes: [{ type: 'cylinder' }],
+      assembly: { method: 'stack' },
+      parts: [{ id: 'A' }, { id: 'B' }],
+    }));
+    const runScript = vi.fn(async () => {
+      throw new Error('runScript should not be called on cache hit');
+    });
+
+    const req = createMockReq({
+      body: {
+        configPath: 'configs/examples/ks_flange.toml',
+        options: {},
+      },
+      appLocals: {
+        freecadRoot: '/tmp/freecad-root',
+        loadConfig,
+        runScript,
+      },
+    });
+    const res = createMockSseRes();
+
+    await handler(req, res);
+
+    expect(runScript).not.toHaveBeenCalled();
+    expect(storeCache).not.toHaveBeenCalled();
+    expect(checkCache).toHaveBeenCalledTimes(5);
+
+    const complete = parseSseEvents(res.chunks).find((event) => event.event === 'complete')?.data;
+    expect(complete.stages).toEqual(['create', 'drawing', 'dfm', 'tolerance', 'cost']);
+    expect(complete.model).toEqual({ model_path: 'output/cached.step' });
+    expect(complete.drawingSvg).toBe('<svg cached />');
+    expect(complete.qa).toEqual({ score: 99 });
+    expect(complete.dfm).toEqual({ score: 95 });
+    expect(complete.tolerance).toEqual({ status: 'tol-cached' });
+    expect(complete.cost).toEqual({ unit_cost: 777 });
+  });
+
+  it('runs tolerance stage with monte-carlo overrides', async () => {
+    const { Cache } = makeCacheClass();
+    const handler = createAnalyzeHandler({
+      AnalysisCacheClass: Cache,
+      loadShopProfileFn: vi.fn(async () => null),
+    });
+
+    const loadConfig = vi.fn(async () => ({
+      name: 'tol_case',
+      shapes: [{ type: 'box' }],
+      assembly: { method: 'stack' },
+      parts: [{ id: 'P1' }, { id: 'P2' }],
+      tolerance: { default_grade: 'IT7' },
+    }));
+    const runScript = vi.fn(async (script, payload) => {
+      if (script === 'create_model.py') return { ok: true };
+      if (script === 'tolerance_analysis.py') {
+        expect(payload.tolerance).toEqual({
+          default_grade: 'IT7',
+          monte_carlo: false,
+          mc_samples: 2048,
+        });
+        return { pass: true };
+      }
+      throw new Error(`unexpected script: ${script}`);
+    });
+
+    const req = createMockReq({
+      body: {
+        configPath: 'configs/examples/ks_flange.toml',
+        options: {
+          drawing: false,
+          dfm: false,
+          cost: false,
+          monteCarlo: false,
+          mcSamples: 2048.9,
+        },
+      },
+      appLocals: {
+        freecadRoot: '/tmp/freecad-root',
+        loadConfig,
+        runScript,
+      },
+    });
+    const res = createMockSseRes();
+
+    await handler(req, res);
+
+    const complete = parseSseEvents(res.chunks).find((event) => event.event === 'complete')?.data;
+    expect(complete.stages).toEqual(['create', 'tolerance']);
+    expect(complete.tolerance).toEqual({ pass: true });
+  });
+
+  it('emits error event when configuration load fails before stages', async () => {
+    const { Cache } = makeCacheClass();
+    const handler = createAnalyzeHandler({
+      AnalysisCacheClass: Cache,
+      loadShopProfileFn: vi.fn(async () => null),
+    });
+
+    const req = createMockReq({
+      body: {
+        configPath: 'configs/examples/missing.toml',
+        options: {},
+      },
+      appLocals: {
+        freecadRoot: '/tmp/freecad-root',
+        loadConfig: vi.fn(async () => {
+          throw new Error('load failed');
+        }),
+        runScript: vi.fn(),
+      },
+    });
+    const res = createMockSseRes();
+
+    await handler(req, res);
+
+    const events = parseSseEvents(res.chunks);
+    expect(events).toEqual([
+      {
+        event: 'error',
+        data: { error: 'load failed' },
+      },
+    ]);
+    expect(res.ended).toBe(true);
+  });
 });
