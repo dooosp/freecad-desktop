@@ -574,10 +574,17 @@ npm run tauri dev
   - `src/components/ReportConfigModal.test.jsx`
   - `src/components/ShopProfileModal.test.jsx`
   - `src/components/TemplateEditorModal.test.jsx`
+  - `src/components/ModelViewer.test.jsx`
+  - `src/components/ShopProfilePanel.test.jsx`
+  - `src/components/StepImportModal.test.jsx`
 - 레이아웃 컴포넌트 단위 테스트 확장
   - `src/components/layout/AppSidebar.test.jsx`
   - `src/components/layout/AppViewerSection.test.jsx`
   - `src/components/layout/AppAnalysisSection.test.jsx`
+  - `src/components/layout/AppEmptyState.test.jsx`
+- 모달 조합 컴포넌트 테스트 확장
+  - `src/components/modals/ProjectFlowModals.test.jsx`
+  - `src/components/modals/AnalysisFlowModals.test.jsx`
 
 ### 11.2 자동 스모크 검증
 
