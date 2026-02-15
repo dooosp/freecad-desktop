@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { copyFile, rm, access, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const port = Number(process.env.BACKEND_PORT || 18080);
 const base = `http://localhost:${port}/api`;
@@ -10,15 +11,15 @@ let freecadRoot = process.env.FREECAD_ROOT || fallbackFreecadRoot;
 const mockTemplates = new Map();
 const smokeOutputPath = process.env.SMOKE_OUTPUT || '';
 
-function sleep(ms) {
+export function sleep(ms) {
   return new Promise((resolveMs) => setTimeout(resolveMs, ms));
 }
 
-function getMockHealth() {
+export function getMockHealth() {
   return { status: 'ok', freecadRoot: '/tmp/freecad-automation-mock' };
 }
 
-function getMockAnalyzeResult() {
+export function getMockAnalyzeResult() {
   return {
     stages: ['create', 'drawing', 'dfm', 'cost'],
     errors: [],
@@ -36,7 +37,11 @@ function getMockAnalyzeResult() {
   };
 }
 
-async function mockRequest(path, { method = 'GET', body = {} } = {}) {
+export function resetMockTemplates() {
+  mockTemplates.clear();
+}
+
+export async function mockRequest(path, { method = 'GET', body = {} } = {}) {
   if (method === 'GET' && path === '/health') return getMockHealth();
   if (method === 'GET' && path === '/profiles') return [{ name: '_default' }, { name: 'sample_precision' }];
   if (method === 'POST' && path === '/profiles/compare') {
@@ -97,7 +102,7 @@ async function mockRequest(path, { method = 'GET', body = {} } = {}) {
   throw new Error(`mock endpoint not found: ${method} ${path}`);
 }
 
-async function request(path, { method = 'GET', body } = {}) {
+export async function request(path, { method = 'GET', body } = {}) {
   if (isMockMode) {
     return mockRequest(path, { method, body });
   }
@@ -114,7 +119,7 @@ async function request(path, { method = 'GET', body } = {}) {
   return data;
 }
 
-async function isHealthy() {
+export async function isHealthy() {
   if (isMockMode) return true;
 
   try {
@@ -125,7 +130,7 @@ async function isHealthy() {
   }
 }
 
-async function readHealth() {
+export async function readHealth() {
   if (isMockMode) return getMockHealth();
 
   const res = await fetch(`${base}/health`);
@@ -136,7 +141,7 @@ async function readHealth() {
   return data;
 }
 
-async function waitForHealth(maxAttempts = 60) {
+export async function waitForHealth(maxAttempts = 60) {
   for (let i = 0; i < maxAttempts; i += 1) {
     if (await isHealthy()) return;
     await sleep(500);
@@ -144,7 +149,7 @@ async function waitForHealth(maxAttempts = 60) {
   throw new Error(`backend health check failed on port ${port}`);
 }
 
-function startBackend() {
+export function startBackend() {
   const proc = spawn('node', ['backend/server.js'], {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -164,13 +169,13 @@ function startBackend() {
   };
 }
 
-function assert(condition, message) {
+export function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
 }
 
-function findEndOfCentralDirectory(zipBuffer) {
+export function findEndOfCentralDirectory(zipBuffer) {
   const EOCD_SIGNATURE = 0x06054b50;
   for (let i = zipBuffer.length - 22; i >= 0; i -= 1) {
     if (zipBuffer.readUInt32LE(i) === EOCD_SIGNATURE) {
@@ -180,7 +185,7 @@ function findEndOfCentralDirectory(zipBuffer) {
   return -1;
 }
 
-function listZipEntries(zipBase64) {
+export function listZipEntries(zipBase64) {
   if (!zipBase64) return [];
   const zipBuffer = Buffer.from(zipBase64, 'base64');
   const eocdOffset = findEndOfCentralDirectory(zipBuffer);
@@ -210,7 +215,7 @@ function listZipEntries(zipBase64) {
   return entries;
 }
 
-function hasDxfEntry(zipBase64) {
+export function hasDxfEntry(zipBase64) {
   const entries = listZipEntries(zipBase64);
   if (entries.length > 0) {
     return entries.some((entry) => entry.toLowerCase().endsWith('.dxf'));
@@ -219,13 +224,13 @@ function hasDxfEntry(zipBase64) {
   return raw.includes('.dxf');
 }
 
-async function persistSmokeResult(payload) {
+export async function persistSmokeResult(payload) {
   if (!smokeOutputPath) return;
   await mkdir(dirname(smokeOutputPath), { recursive: true });
   await writeFile(smokeOutputPath, JSON.stringify(payload, null, 2), 'utf8');
 }
 
-async function analyze(configPath) {
+export async function analyze(configPath) {
   if (isMockMode) {
     return getMockAnalyzeResult();
   }
@@ -296,7 +301,9 @@ async function analyze(configPath) {
 const tempFiles = [];
 let ownedBackend = null;
 
-async function main() {
+export async function runSmoke() {
+  tempFiles.length = 0;
+  ownedBackend = null;
   const summary = {};
 
   try {
@@ -513,6 +520,7 @@ async function main() {
     const payload = { ok: true, summary };
     await persistSmokeResult(payload);
     console.log(JSON.stringify(payload, null, 2));
+    return payload;
   } catch (error) {
     const backendLogs = ownedBackend?.getLogs?.() || undefined;
     const payload = {
@@ -524,6 +532,7 @@ async function main() {
     await persistSmokeResult(payload);
     console.error(JSON.stringify(payload, null, 2));
     process.exitCode = 1;
+    return payload;
   } finally {
     await Promise.allSettled(tempFiles.map((p) => rm(p, { force: true })));
 
@@ -537,4 +546,7 @@ async function main() {
   }
 }
 
-await main();
+const isMainModule = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMainModule) {
+  await runSmoke();
+}

@@ -591,6 +591,7 @@ npm run tauri dev
 - 스크립트 단위 테스트 확장
   - `scripts/update-report-smoke.test.js`
   - `scripts/check-ci.test.js`
+  - `scripts/smoke-core.test.js`
 - 커버리지 집계 예외 정리
   - `src/contracts/**` 제외 (JSDoc typedef 중심 계약 파일로 런타임 라인 미생성)
 
