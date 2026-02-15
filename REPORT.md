@@ -569,6 +569,11 @@ npm run tauri dev
   - `src/components/DfmPanel.test.jsx`
   - `src/components/TolerancePanel.test.jsx`
   - `src/components/SettingsPanel.test.jsx`
+  - `src/components/ExportPackModal.test.jsx`
+  - `src/components/ProfileCompareModal.test.jsx`
+  - `src/components/ReportConfigModal.test.jsx`
+  - `src/components/ShopProfileModal.test.jsx`
+  - `src/components/TemplateEditorModal.test.jsx`
 - 레이아웃 컴포넌트 단위 테스트 확장
   - `src/components/layout/AppSidebar.test.jsx`
   - `src/components/layout/AppViewerSection.test.jsx`
