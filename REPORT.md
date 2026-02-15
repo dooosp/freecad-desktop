@@ -541,6 +541,7 @@ npm run tauri dev
   - `backend/routes/tolerance.test.js`
   - `backend/routes/step-import.test.js`
   - `backend/routes/report-template.test.js`
+  - `backend/routes/analyze.test.js`
 - 컨텍스트 통합 회귀 테스트 추가
   - `src/components/appShell.integration.test.jsx`
 
