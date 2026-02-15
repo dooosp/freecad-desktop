@@ -565,6 +565,14 @@ npm run tauri dev
   - `src/components/ProgressBar.test.jsx`
   - `src/components/DrawingViewer.test.jsx`
   - `src/components/ReportPreview.test.jsx`
+  - `src/components/CostPanel.test.jsx`
+  - `src/components/DfmPanel.test.jsx`
+  - `src/components/TolerancePanel.test.jsx`
+  - `src/components/SettingsPanel.test.jsx`
+- 레이아웃 컴포넌트 단위 테스트 확장
+  - `src/components/layout/AppSidebar.test.jsx`
+  - `src/components/layout/AppViewerSection.test.jsx`
+  - `src/components/layout/AppAnalysisSection.test.jsx`
 
 ### 11.2 자동 스모크 검증
 
