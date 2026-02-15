@@ -528,6 +528,10 @@ npm run tauri dev
   - `src/hooks/useProjectState.test.jsx`
   - `src/hooks/useProfileState.test.jsx`
   - `src/hooks/useModalState.test.jsx`
+- 핵심 라우트 핸들러 단위 테스트 추가
+  - `backend/routes/profile.test.js`
+  - `backend/routes/report.test.js`
+  - `backend/routes/export-pack.test.js`
 - 컨텍스트 통합 회귀 테스트 추가
   - `src/components/appShell.integration.test.jsx`
 

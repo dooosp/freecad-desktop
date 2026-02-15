@@ -27,10 +27,8 @@ const router = Router();
  * }
  * Output: { zipBase64: string, filename: string }
  */
-router.post('/', async (req, res) => {
+export async function exportPackHandler(req, res) {
   const freecadRoot = req.app.locals.freecadRoot;
-  const { loadConfig } = await import(`${freecadRoot}/lib/config-loader.js`);
-
   const {
     configPath,
     profileName = '',
@@ -46,6 +44,7 @@ router.post('/', async (req, res) => {
   if (!configPath) return res.status(400).json({ error: 'configPath required' });
 
   try {
+    const { loadConfig } = await import(`${freecadRoot}/lib/config-loader.js`);
     const config = await loadConfig(resolve(freecadRoot, configPath));
 
     const packOptions = {
@@ -67,6 +66,8 @@ router.post('/', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}
+
+router.post('/', exportPackHandler);
 
 export default router;

@@ -11,7 +11,7 @@ function toBool(val, fallback) {
   return fallback;
 }
 
-function mergeTemplateOverrides(template, sections, options) {
+export function mergeTemplateOverrides(template, sections, options) {
   const merged = { ...(template || {}) };
 
   if (sections && typeof sections === 'object') {
@@ -57,7 +57,7 @@ function sanitizeString(value) {
     .replace(/[\uD800-\uDFFF]/g, '');
 }
 
-function sanitizeObject(value) {
+export function sanitizeObject(value) {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') return sanitizeString(value);
   if (Array.isArray(value)) return value.map(sanitizeObject);
@@ -73,7 +73,7 @@ function sanitizeObject(value) {
  * POST /api/report - Generate integrated PDF report
  * Input: { configPath: string, includeDrawing, includeDfm, includeTolerance, includeCost }
  */
-router.post('/report', asyncHandler(async (req, res) => {
+export async function generateReportHandler(req, res) {
   const { freecadRoot, runScript, loadConfig } = req.app.locals;
   const {
     configPath,
@@ -186,6 +186,8 @@ router.post('/report', asyncHandler(async (req, res) => {
   }
 
   res.json(result);
-}));
+}
+
+router.post('/report', asyncHandler(generateReportHandler));
 
 export default router;

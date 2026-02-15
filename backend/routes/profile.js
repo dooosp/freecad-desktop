@@ -10,7 +10,7 @@ const router = Router();
  * POST /api/profiles/compare - Compare two profiles (DFM + Cost only, skip model/drawing)
  * Body: { configPath, profileA, profileB, options: { process, material, batch } }
  */
-router.post('/compare', asyncHandler(async (req, res) => {
+export async function compareProfilesHandler(req, res) {
   const { freecadRoot, runScript, loadConfig } = req.app.locals;
   const { configPath, profileA, profileB, options = {} } = req.body;
   if (!configPath) throw createHttpError(400, 'configPath required');
@@ -48,7 +48,9 @@ router.post('/compare', asyncHandler(async (req, res) => {
   ]);
 
   res.json({ profileA: resultA, profileB: resultB });
-}));
+}
+
+router.post('/compare', asyncHandler(compareProfilesHandler));
 
 /**
  * GET /api/profiles - List all shop profiles
