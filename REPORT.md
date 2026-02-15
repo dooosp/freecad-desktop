@@ -547,6 +547,13 @@ npm run tauri dev
   - `backend/routes/report.route.test.js`
   - `backend/routes/router-contracts.test.js`
   - `backend/server.test.js`
+- 백엔드 유틸 단위 테스트 확장
+  - `backend/lib/cost-estimator.test.js`
+  - `backend/lib/csv-generator.test.js`
+  - `backend/lib/step-analyzer.test.js`
+  - `backend/lib/qa-runner.test.js`
+  - `backend/lib/svg-postprocess.test.js`
+  - `backend/lib/pack-builder.test.js` (buildPack 경로 포함)
 - 컨텍스트 통합 회귀 테스트 추가
   - `src/components/appShell.integration.test.jsx`
 
