@@ -548,8 +548,10 @@ npm run tauri dev
   - `backend/routes/router-contracts.test.js`
   - `backend/server.test.js`
 - 백엔드 유틸 단위 테스트 확장
+  - `backend/lib/analysis-cache.test.js`
   - `backend/lib/cost-estimator.test.js`
   - `backend/lib/csv-generator.test.js`
+  - `backend/lib/profile-loader.test.js`
   - `backend/lib/step-analyzer.test.js`
   - `backend/lib/qa-runner.test.js`
   - `backend/lib/svg-postprocess.test.js`
