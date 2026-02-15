@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { generateReportHandler } from './report.js';
+import { generateReportHandler } from './handlers/report-handler.js';
 import { createMockReq, createMockRes } from './handler-test-helpers.js';
 
 const tempRoots = [];

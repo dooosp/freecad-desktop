@@ -13,7 +13,7 @@ vi.mock('../lib/pack-builder.js', () => ({
 }));
 
 import { buildPack } from '../lib/pack-builder.js';
-import { exportPackHandler } from './export-pack.js';
+import { exportPackHandler } from './handlers/export-pack-handler.js';
 
 const tempRoots = [];
 
