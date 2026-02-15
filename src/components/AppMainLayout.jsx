@@ -10,6 +10,7 @@ const TolerancePanel = lazy(() => import('./TolerancePanel.jsx'));
 const CostPanel = lazy(() => import('./CostPanel.jsx'));
 const ReportPreview = lazy(() => import('./ReportPreview.jsx'));
 
+/** @param {import('../contracts/appShellContracts.js').AppMainLayoutProps} props */
 export default function AppMainLayout({
   backend,
   profiles,

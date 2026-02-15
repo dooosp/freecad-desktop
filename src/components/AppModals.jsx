@@ -6,6 +6,7 @@ import TemplateEditorModal from './TemplateEditorModal.jsx';
 import ProfileCompareModal from './ProfileCompareModal.jsx';
 import ExportPackModal from './ExportPackModal.jsx';
 
+/** @param {import('../contracts/appShellContracts.js').AppModalsProps} props */
 export default function AppModals({
   backend,
   configPath,

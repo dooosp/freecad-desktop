@@ -1,5 +1,6 @@
 import React from 'react';
 
+/** @param {import('../contracts/appShellContracts.js').AppHeaderProps} props */
 export default function AppHeader({
   backend,
   configPath,
