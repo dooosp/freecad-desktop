@@ -544,6 +544,7 @@ npm run tauri dev
 
 - GitHub Actions
   - `.github/workflows/desktop-ci.yml`
+  - `.github/workflows/report-smoke.yml` (Desktop CI 성공 후 스모크 요약/REPORT preview artifact 생성)
 - 실행 순서
   1. `npm ci`
   2. `npm run verify`
@@ -556,13 +557,14 @@ npm run tauri dev
 npm run verify
 npm run test:coverage
 npm run report:smoke
+npm run report:smoke:mock
 npm run ci:status   # gh 로그인/네트워크 가능 환경에서 CI 상태 확인
 ```
 
 ### 11.5 최근 스모크 요약 (자동 생성)
 
 <!-- SMOKE_SUMMARY:START -->
-_Updated: 2026-02-15T01:37:29.188Z_
+_Updated: 2026-02-15T01:44:38.249Z_
 - Result: `ok`
 - Analyze stages: create, drawing, dfm, cost
 - Analyze DXF output: yes
@@ -602,7 +604,7 @@ _Updated: 2026-02-15T01:37:29.188Z_
     },
     "templateCrud": {
       "success": true,
-      "createdName": "smoke_template_1771119399427",
+      "createdName": "smoke_template_1771119878068",
       "fetched": true,
       "listed": true,
       "deleted": true

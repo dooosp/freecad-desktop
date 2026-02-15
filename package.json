@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "smoke:core": "node scripts/smoke-core.mjs",
     "report:smoke": "node scripts/update-report-smoke.mjs",
+    "report:smoke:mock": "SMOKE_OUTPUT=artifacts/smoke-core-summary.json SMOKE_MOCK=1 BACKEND_PORT=18081 npm run smoke:core && npm run report:smoke",
     "verify": "npm test && npm run build && SMOKE_MOCK=1 BACKEND_PORT=18081 npm run smoke:core",
     "ci:status": "node scripts/check-ci.mjs",
     "preview": "vite preview",
