@@ -10,6 +10,7 @@ jobs:
   refresh:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,6 +22,7 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install Dependencies
         run: npm ci
@@ -28,14 +30,28 @@ jobs:
       - name: Generate Smoke Summary And Report Section
         run: npm run report:smoke:mock
 
+      - name: Ensure Smoke Summary Artifact
+        if: always()
+        run: node scripts/ensure-smoke-artifact.mjs artifacts/smoke-core-summary.json "Report Smoke Refresh"
+
+      - name: Inspect Smoke Artifact Directory
+        if: always()
+        run: |
+          ls -lah artifacts || true
+          wc -c artifacts/smoke-core-summary.json || true
+
       - name: Upload Smoke Summary
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-core-summary-refresh
           path: artifacts/smoke-core-summary.json
+          if-no-files-found: error
 
       - name: Upload Report Preview
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: report-smoke-preview
           path: REPORT.md
+          if-no-files-found: warn

@@ -9,6 +9,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,6 +19,7 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install Dependencies
         run: npm ci
@@ -28,16 +30,28 @@ jobs:
       - name: Test Coverage
         run: npm run test:coverage
 
+      - name: Ensure Smoke Artifact
+        if: always()
+        run: node scripts/ensure-smoke-artifact.mjs artifacts/smoke-core-summary.json "Desktop CI"
+
+      - name: Inspect Smoke Artifact Directory
+        if: always()
+        run: |
+          ls -lah artifacts || true
+          wc -c artifacts/smoke-core-summary.json || true
+
       - name: Upload Smoke Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-core-summary
           path: artifacts/smoke-core-summary.json
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload Coverage Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage/
+          if-no-files-found: warn
