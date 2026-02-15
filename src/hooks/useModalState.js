@@ -1,5 +1,27 @@
 import { useState, useCallback } from 'react';
 
+export function formatExportPackError(error) {
+  const raw = String(error?.message || '').trim();
+  const normalized = raw.toLowerCase();
+
+  if (normalized.includes('configpath required')) {
+    return 'Select a valid config before exporting. Re-open the part and try again.';
+  }
+  if (normalized.includes('enoent') || normalized.includes('no such file') || normalized.includes('not found')) {
+    return 'Some required output files are missing. Run Analyze and Report again, then retry export.';
+  }
+  if (
+    normalized.includes('econnrefused') ||
+    normalized.includes('failed to fetch') ||
+    normalized.includes('network') ||
+    normalized.includes('http 5')
+  ) {
+    return 'Export service is temporarily unavailable. Wait a moment and retry.';
+  }
+
+  return 'Export package generation failed. Check inputs and retry.';
+}
+
 export function useModalState({ backend, configPath, results, setResults, activeProfile, setViewerTab }) {
   const [showReportModal, setShowReportModal] = useState(false);
   const [lastTemplateName, setLastTemplateName] = useState(null);
@@ -84,16 +106,19 @@ export function useModalState({ backend, configPath, results, setResults, active
 
   const handleExportPack = useCallback(async (options) => {
     try {
-      await backend.exportPack({
+      const response = await backend.exportPack({
         ...options,
         analysisResults: results || {},
         reportPdfBase64: results?.report?.pdfBase64 || null,
         profileName: activeProfile !== '_default' ? activeProfile : '',
         templateName: lastTemplateName || '',
       });
-      setShowExportModal(false);
-    } catch {
-      backend.setError('Failed to generate export pack');
+      backend.setError(null);
+      return response;
+    } catch (error) {
+      const message = formatExportPackError(error);
+      backend.setError(message);
+      throw new Error(message);
     }
   }, [results, activeProfile, lastTemplateName, backend]);
 

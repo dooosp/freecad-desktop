@@ -62,7 +62,7 @@
  * @property {() => void} closeTemplateEditor
  * @property {() => void} openExportModal
  * @property {() => void} closeExportModal
- * @property {(options: object) => Promise<void>} handleExportPack
+ * @property {(options: object) => Promise<object>} handleExportPack
  */
 
 /**

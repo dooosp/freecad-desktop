@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { useModalState } from './useModalState.js';
+import { formatExportPackError, useModalState } from './useModalState.js';
 
 function createBackendMock(overrides = {}) {
   return {
@@ -15,6 +15,21 @@ function createBackendMock(overrides = {}) {
 }
 
 describe('useModalState', () => {
+  it('maps raw export errors to actionable user messages', () => {
+    expect(formatExportPackError(new Error('configPath required'))).toBe(
+      'Select a valid config before exporting. Re-open the part and try again.'
+    );
+    expect(formatExportPackError(new Error('ENOENT: no such file or directory'))).toBe(
+      'Some required output files are missing. Run Analyze and Report again, then retry export.'
+    );
+    expect(formatExportPackError(new Error('ECONNREFUSED 127.0.0.1:8080'))).toBe(
+      'Export service is temporarily unavailable. Wait a moment and retry.'
+    );
+    expect(formatExportPackError(new Error('random issue'))).toBe(
+      'Export package generation failed. Check inputs and retry.'
+    );
+  });
+
   it('generates report and updates report/viewer/modal state', async () => {
     const backend = createBackendMock();
     const setResults = vi.fn();
@@ -156,20 +171,23 @@ describe('useModalState', () => {
     });
     expect(result.current.showExportModal).toBe(true);
 
+    let exportResponse;
     await act(async () => {
-      await result.current.handleExportPack({
+      exportResponse = await result.current.handleExportPack({
         configPath: 'configs/examples/ks_flange.toml',
         include: { report: true },
       });
     });
 
+    expect(exportResponse).toEqual({ success: true });
     expect(backend.exportPack).toHaveBeenCalledWith(expect.objectContaining({
       analysisResults: currentResults,
       reportPdfBase64: 'report-pdf',
       profileName: 'sample_precision',
       templateName: 'tpl-export',
     }));
-    expect(result.current.showExportModal).toBe(false);
+    expect(backend.setError).toHaveBeenCalledWith(null);
+    expect(result.current.showExportModal).toBe(true);
   });
 
   it('surfaces template load failure through backend error state', async () => {
@@ -195,7 +213,7 @@ describe('useModalState', () => {
 
   it('surfaces export failure and keeps export modal open', async () => {
     const backend = createBackendMock({
-      exportPack: vi.fn().mockRejectedValue(new Error('export failed')),
+      exportPack: vi.fn().mockRejectedValue(new Error('ENOENT: no such file or directory')),
     });
 
     const { result } = renderHook(() => useModalState({
@@ -211,14 +229,23 @@ describe('useModalState', () => {
       result.current.openExportModal();
     });
 
+    let caught;
     await act(async () => {
-      await result.current.handleExportPack({
-        configPath: 'configs/examples/ks_flange.toml',
-        include: { report: true },
-      });
+      try {
+        await result.current.handleExportPack({
+          configPath: 'configs/examples/ks_flange.toml',
+          include: { report: true },
+        });
+      } catch (error) {
+        caught = error;
+      }
     });
 
-    expect(backend.setError).toHaveBeenCalledWith('Failed to generate export pack');
+    expect(caught).toBeTruthy();
+    expect(caught.message).toBe('Some required output files are missing. Run Analyze and Report again, then retry export.');
+    expect(backend.setError).toHaveBeenCalledWith(
+      'Some required output files are missing. Run Analyze and Report again, then retry export.'
+    );
     expect(result.current.showExportModal).toBe(true);
   });
 });
