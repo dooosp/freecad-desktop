@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { copyFile, rm, access } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -5,10 +6,32 @@ import { resolve } from 'node:path';
 const port = Number(process.env.BACKEND_PORT || 18080);
 const base = `http://localhost:${port}/api`;
 const fallbackFreecadRoot = '/home/taeho/freecad-automation';
+const isMockMode = process.env.SMOKE_MOCK === '1';
 let freecadRoot = process.env.FREECAD_ROOT || fallbackFreecadRoot;
 
 function sleep(ms) {
   return new Promise((resolveMs) => setTimeout(resolveMs, ms));
+}
+
+function sendJson(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(body));
+}
+
+function readBody(req) {
+  return new Promise((resolveBody) => {
+    let raw = '';
+    req.on('data', (chunk) => {
+      raw += chunk.toString();
+    });
+    req.on('end', () => {
+      try {
+        resolveBody(raw ? JSON.parse(raw) : {});
+      } catch {
+        resolveBody({});
+      }
+    });
+  });
 }
 
 async function request(path, { method = 'GET', body } = {}) {
@@ -68,6 +91,95 @@ function startBackend() {
     proc,
     getLogs: () => logs,
   };
+}
+
+async function startMockApiServer() {
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url || '/', `http://localhost:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/api/health') {
+      sendJson(res, 200, { status: 'ok', freecadRoot: '/tmp/freecad-automation-mock' });
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/profiles') {
+      sendJson(res, 200, [{ name: '_default' }, { name: 'sample_precision' }]);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/analyze') {
+      const result = {
+        stages: ['create', 'drawing', 'dfm', 'cost'],
+        errors: [],
+        model: { exports: [{ format: 'step', path: 'output/mock.step' }] },
+        drawing: { drawing_paths: [{ format: 'svg', path: 'output/mock.svg' }] },
+        drawingSvg: '<svg></svg>',
+        dfm: { score: 92 },
+        cost: { unit_cost: 12345 },
+      };
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+
+      const stages = ['create', 'drawing', 'dfm', 'cost'];
+      for (const stage of stages) {
+        res.write(`event: stage\ndata: ${JSON.stringify({ stage, status: 'done' })}\n\n`);
+      }
+      res.write(`event: complete\ndata: ${JSON.stringify(result)}\n\n`);
+      res.end();
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/dfm') {
+      await readBody(req);
+      sendJson(res, 200, { score: 95, summary: 'mock' });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/report') {
+      await readBody(req);
+      sendJson(res, 200, { pdfBase64: Buffer.from('mock-report').toString('base64') });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/export-pack') {
+      await readBody(req);
+      sendJson(res, 200, {
+        filename: 'mock-pack.zip',
+        zipBase64: Buffer.from('mock-zip').toString('base64'),
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/step/import') {
+      await readBody(req);
+      sendJson(res, 200, {
+        success: true,
+        analysis: { part_type: 'mock' },
+        tomlString: 'name = "mock_part"',
+        configPath: 'configs/imports/mock-part.toml',
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/step/save-config') {
+      await readBody(req);
+      sendJson(res, 200, { success: true });
+      return;
+    }
+
+    sendJson(res, 404, { error: 'mock endpoint not found' });
+  });
+
+  await new Promise((resolveStart, rejectStart) => {
+    server.once('error', rejectStart);
+    server.listen(port, resolveStart);
+  });
+
+  return server;
 }
 
 async function analyze(configPath) {
@@ -135,15 +247,20 @@ async function analyze(configPath) {
 
 const tempFiles = [];
 let ownedBackend = null;
+let ownedMockServer = null;
 
 async function main() {
   const summary = {};
 
   try {
-    const healthy = await isHealthy();
-    if (!healthy) {
-      ownedBackend = startBackend();
-      await waitForHealth();
+    if (isMockMode) {
+      ownedMockServer = await startMockApiServer();
+    } else {
+      const healthy = await isHealthy();
+      if (!healthy) {
+        ownedBackend = startBackend();
+        await waitForHealth();
+      }
     }
 
     const health = await readHealth();
@@ -241,15 +358,19 @@ async function main() {
       zipBytes: exported?.zipBase64 ? Buffer.from(exported.zipBase64, 'base64').length : 0,
     };
 
-    const sourceStep = resolve(freecadRoot, 'output/ks_flange.step');
-    await access(sourceStep);
-    const tempStep = `/tmp/freecad-desktop-smoke-${Date.now()}.step`;
-    await copyFile(sourceStep, tempStep);
-    tempFiles.push(tempStep);
+    let stepImportPath = '/tmp/mock.step';
+    if (!isMockMode) {
+      const sourceStep = resolve(freecadRoot, 'output/ks_flange.step');
+      await access(sourceStep);
+      const tempStep = `/tmp/freecad-desktop-smoke-${Date.now()}.step`;
+      await copyFile(sourceStep, tempStep);
+      tempFiles.push(tempStep);
+      stepImportPath = tempStep;
+    }
 
     const step = await request('/step/import', {
       method: 'POST',
-      body: { filePath: tempStep },
+      body: { filePath: stepImportPath },
     });
 
     await request('/step/save-config', {
@@ -260,8 +381,10 @@ async function main() {
       },
     });
 
-    const importedConfig = resolve(freecadRoot, step.configPath);
-    tempFiles.push(importedConfig);
+    if (!isMockMode) {
+      const importedConfig = resolve(freecadRoot, step.configPath);
+      tempFiles.push(importedConfig);
+    }
 
     summary.step = {
       success: Boolean(step?.success),
@@ -271,11 +394,12 @@ async function main() {
 
     console.log(JSON.stringify({ ok: true, summary }, null, 2));
   } catch (error) {
-    const backendLogs = ownedBackend?.getLogs?.() || '';
+    const backendLogs = ownedBackend?.getLogs?.() || undefined;
     console.error(JSON.stringify({
       ok: false,
       error: error.message,
-      backendLogs: backendLogs.trim() || undefined,
+      backendLogs: backendLogs?.trim() || undefined,
+      mode: isMockMode ? 'mock' : 'real',
     }, null, 2));
     process.exitCode = 1;
   } finally {
@@ -286,6 +410,12 @@ async function main() {
       await new Promise((resolveDone) => {
         ownedBackend.proc.once('exit', resolveDone);
         setTimeout(resolveDone, 1500);
+      });
+    }
+
+    if (ownedMockServer) {
+      await new Promise((resolveDone) => {
+        ownedMockServer.close(() => resolveDone());
       });
     }
   }

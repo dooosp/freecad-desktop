@@ -517,3 +517,43 @@ npm run tauri dev
 | 예제 config | 4개 (KS 규격 부품) |
 | 지원 공정 | 4개 (기계가공, 주조, 판금, 3D프린팅) |
 | 지원 재료 | 8개 (SS304, AL6061, S45C 등) |
+
+---
+
+## 11. R4 안정화 (테스트/CI)
+
+### 11.1 테스트 범위 확장
+
+- 훅 단위 테스트 추가
+  - `src/hooks/useProjectState.test.jsx`
+  - `src/hooks/useProfileState.test.jsx`
+  - `src/hooks/useModalState.test.jsx`
+- 컨텍스트 통합 회귀 테스트 추가
+  - `src/components/appShell.integration.test.jsx`
+
+### 11.2 자동 스모크 검증
+
+- 핵심 기능 스모크 스크립트
+  - `scripts/smoke-core.mjs`
+- 검증 대상
+  - Analyze / Rerun / Profile / Report / Export / STEP
+- CI 환경에서 `SMOKE_MOCK=1` 모드 지원
+  - FreeCAD 런타임이 없는 환경에서도 API 플로우 회귀 검증 가능
+
+### 11.3 CI 워크플로
+
+- GitHub Actions
+  - `.github/workflows/desktop-ci.yml`
+- 실행 순서
+  1. `npm ci`
+  2. `npm test`
+  3. `npm run build`
+  4. `SMOKE_MOCK=1 BACKEND_PORT=18081 npm run smoke:core`
+
+### 11.4 로컬 검증 명령
+
+```bash
+npm test
+npm run build
+npm run smoke:core
+```
