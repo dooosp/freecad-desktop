@@ -552,4 +552,5 @@ npm run tauri dev
 
 ```bash
 npm run verify
+npm run ci:status   # gh 로그인/네트워크 가능 환경에서 CI 상태 확인
 ```
