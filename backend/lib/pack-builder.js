@@ -86,7 +86,7 @@ export async function buildPack(options) {
   if (include.svg) {
     const svgPath = getExportPathByFormat(results.drawing, 'svg');
     const svgSrc = toOutputPath(svgPath, pathRoots);
-    if (svgSrc) {
+    if (svgSrc && existsSync(svgSrc)) {
       const file = basename(svgSrc);
       copyFileSync(svgSrc, join(dirs.drawing, file));
       includedDrawingFiles.push(file);
@@ -96,7 +96,7 @@ export async function buildPack(options) {
   if (include.dxf) {
     const dxfPath = getExportPathByFormat(results.drawing, 'dxf');
     const dxfSrc = toOutputPath(dxfPath, pathRoots);
-    if (dxfSrc) {
+    if (dxfSrc && existsSync(dxfSrc)) {
       const file = basename(dxfSrc);
       copyFileSync(dxfSrc, join(dirs.drawing, file));
       includedDrawingFiles.push(file);
@@ -106,7 +106,7 @@ export async function buildPack(options) {
   if (include.drawing_pdf) {
     const drawingPdfPath = getExportPathByFormat(results.drawing, 'pdf');
     const pdfSrc = toOutputPath(drawingPdfPath, pathRoots);
-    if (pdfSrc) {
+    if (pdfSrc && existsSync(pdfSrc)) {
       const file = basename(pdfSrc);
       copyFileSync(pdfSrc, join(dirs.drawing, file));
       includedDrawingFiles.push(file);

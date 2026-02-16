@@ -27,7 +27,12 @@ export function createDrawingHandler({
 
     if (preset) {
       const presetPath = resolve(freecadRoot, 'configs', 'overrides', 'presets', `${preset}.toml`);
-      const presetConfig = await loadConfig(presetPath);
+      let presetConfig;
+      try {
+        presetConfig = await loadConfig(presetPath);
+      } catch (err) {
+        throw createHttpError(400, `Invalid preset '${preset}': ${err.message}`);
+      }
       config = deepMerge(config, presetConfig);
     }
 

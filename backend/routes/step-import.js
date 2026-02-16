@@ -8,7 +8,7 @@ import { runStepImportHandler, saveStepConfigHandler } from './handlers/step-imp
 const router = Router();
 const uploadDir = join(tmpdir(), 'freecad-uploads');
 mkdirSync(uploadDir, { recursive: true });
-const upload = multer({ dest: uploadDir });
+const upload = multer({ dest: uploadDir, limits: { fileSize: 50 * 1024 * 1024 } });
 
 router.post('/step/import', upload.single('file'), runStepImportHandler);
 router.post('/step/save-config', saveStepConfigHandler);

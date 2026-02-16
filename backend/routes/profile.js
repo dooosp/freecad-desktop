@@ -85,7 +85,8 @@ router.post('/', async (req, res) => {
   const { name, ...profileData } = req.body;
 
   if (!name) return res.status(400).json({ error: 'name required' });
-  if (name === '_default') return res.status(400).json({ error: 'name _default is reserved' });
+  const RESERVED_NAMES = ['_default', '__proto__', 'constructor', 'prototype'];
+  if (RESERVED_NAMES.includes(name)) return res.status(400).json({ error: `name '${name}' is reserved` });
   if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
     return res.status(400).json({ error: 'Invalid name format (use alphanumeric, _, -)' });
   }

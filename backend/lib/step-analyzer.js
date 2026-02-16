@@ -119,12 +119,14 @@ export function generateConfigFromAnalysis(analysis, userOverrides = {}) {
 
   // Build TOML string
   const lines = [];
-  lines.push(`name = "${config.name || 'imported_part'}"`);
+  const safeName = (config.name || 'imported_part').replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+  lines.push(`name = "${safeName}"`);
   lines.push('');
 
   if (sourceStep) {
     lines.push('[import]');
-    lines.push(`source_step = "${sourceStep.replaceAll('\\', '\\\\')}"`);
+    const escapedStep = sourceStep.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+    lines.push(`source_step = "${escapedStep}"`);
     lines.push(`template_only = ${config.import?.template_only === false ? 'false' : 'true'}`);
     lines.push('');
     lines.push('# NOTE: This imported config is a template.');
