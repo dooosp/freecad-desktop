@@ -1,7 +1,13 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { join, basename } from 'node:path';
+import { join, basename, resolve, sep } from 'node:path';
 
 const PROJECT_VERSION = 1;
+
+function isPathInside(baseDir, targetPath) {
+  const base = resolve(baseDir);
+  const target = resolve(targetPath);
+  return target === base || target.startsWith(`${base}${sep}`);
+}
 
 export function getProjectsDir(req) {
   return join(req.app.locals.freecadRoot, 'projects');
@@ -43,7 +49,10 @@ export async function saveProjectHandler(req, res) {
     const data = { version: PROJECT_VERSION, ...projectData, saved: new Date().toISOString() };
     const safeName = projectData.name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'untitled';
     const filename = `${safeName}.fcstudio`;
-    const filePath = join(dir, filename);
+    const filePath = resolve(dir, filename);
+    if (!isPathInside(dir, filePath)) {
+      return res.status(400).json({ error: 'Invalid project path' });
+    }
 
     await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
     await updateRecent(req, { path: filePath, name: projectData.name, date: data.saved });
@@ -61,10 +70,15 @@ export async function openProjectHandler(req, res) {
     if (!String(filePath).toLowerCase().endsWith('.fcstudio')) {
       return res.status(400).json({ error: 'Only .fcstudio project files are supported' });
     }
+    const dir = getProjectsDir(req);
+    const requestedPath = resolve(dir, String(filePath));
+    if (!isPathInside(dir, requestedPath)) {
+      return res.status(403).json({ error: 'Invalid project path' });
+    }
 
     let raw;
     try {
-      raw = await readFile(filePath, 'utf-8');
+      raw = await readFile(requestedPath, 'utf-8');
     } catch (err) {
       if (err?.code === 'ENOENT') return res.status(404).json({ error: 'Project file not found' });
       throw err;
@@ -78,8 +92,8 @@ export async function openProjectHandler(req, res) {
     }
 
     await updateRecent(req, {
-      path: filePath,
-      name: projectData.name || basename(filePath, '.fcstudio'),
+      path: requestedPath,
+      name: projectData.name || basename(requestedPath, '.fcstudio'),
       date: projectData.saved || projectData.created || new Date().toISOString(),
     });
 

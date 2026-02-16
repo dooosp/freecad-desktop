@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 
 export default function DrawingViewer({ svgContent, qa }) {
   const containerRef = useRef(null);
@@ -46,6 +47,10 @@ export default function DrawingViewer({ svgContent, qa }) {
     }
   }, [handleWheel]);
 
+  const sanitizedSvg = useMemo(() => DOMPurify.sanitize(svgContent || '', {
+    USE_PROFILES: { svg: true, svgFilters: true },
+  }), [svgContent]);
+
   return (
     <div className="drawing-viewer">
       <div className="viewer-toolbar">
@@ -74,7 +79,7 @@ export default function DrawingViewer({ svgContent, qa }) {
             transformOrigin: 'center center',
             cursor: isPanning ? 'grabbing' : 'grab',
           }}
-          dangerouslySetInnerHTML={{ __html: svgContent }}
+          dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
         />
       </div>
     </div>

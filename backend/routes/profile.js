@@ -28,7 +28,13 @@ router.get('/', async (req, res) => {
       jsonFiles.map(async (file) => {
         try {
           const content = await readFile(join(profilesDir, file), 'utf8');
-          const data = JSON.parse(content);
+          let data;
+          try {
+            data = JSON.parse(content);
+          } catch (err) {
+            console.error(`[profiles] Invalid JSON in ${file}: ${err.message}`);
+            return null;
+          }
           return {
             name: file.replace('.json', ''),
             description: data.description || '',
@@ -55,10 +61,18 @@ router.get('/:name', async (req, res) => {
 
   try {
     const content = await readFile(profilePath, 'utf8');
-    const profile = JSON.parse(content);
+    let profile;
+    try {
+      profile = JSON.parse(content);
+    } catch (err) {
+      return res.status(500).json({ error: `Invalid profile JSON: ${err.message}` });
+    }
     res.json({ name: req.params.name, ...profile });
   } catch (err) {
-    res.status(404).json({ error: 'Profile not found' });
+    if (err.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -110,7 +124,12 @@ router.put('/:name', async (req, res) => {
 
   try {
     const existing = await readFile(profilePath, 'utf8');
-    const current = JSON.parse(existing);
+    let current;
+    try {
+      current = JSON.parse(existing);
+    } catch (err) {
+      return res.status(500).json({ error: `Invalid profile JSON: ${err.message}` });
+    }
 
     const updated = {
       ...current,

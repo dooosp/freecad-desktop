@@ -1,6 +1,12 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, basename, extname, relative, isAbsolute } from 'node:path';
+import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
+import { resolve, basename, extname, sep } from 'node:path';
 import { analyzeStep, generateConfigFromAnalysis } from '../../lib/step-analyzer.js';
+
+function isPathInside(baseDir, targetPath) {
+  const base = resolve(baseDir);
+  const target = resolve(targetPath);
+  return target === base || target.startsWith(`${base}${sep}`);
+}
 
 export function createStepImportHandler({
   analyzeStepFn = analyzeStep,
@@ -11,16 +17,21 @@ export function createStepImportHandler({
 } = {}) {
   return async function stepImportHandler(req, res) {
     const freecadRoot = req.app.locals.freecadRoot;
+    const tempUploadPath = req.file?.path;
 
     try {
       let stepFilePath;
       let stepName;
 
       if (req.file) {
-        stepName = basename(req.file.originalname, extname(req.file.originalname));
+        const originalName = basename(req.file.originalname || 'uploaded.step');
+        stepName = basename(originalName, extname(originalName));
         const importsDir = resolve(freecadRoot, 'output', 'imports');
         await mkdirFn(importsDir, { recursive: true });
-        stepFilePath = resolve(importsDir, req.file.originalname);
+        stepFilePath = resolve(importsDir, originalName);
+        if (!isPathInside(importsDir, stepFilePath)) {
+          return res.status(403).json({ error: 'Invalid STEP upload path' });
+        }
         const uploaded = await readFileFn(req.file.path);
         await writeFileFn(stepFilePath, uploaded);
       } else if (req.body?.filePath) {
@@ -47,6 +58,10 @@ export function createStepImportHandler({
       });
     } catch (err) {
       return res.status(500).json({ error: err.message });
+    } finally {
+      if (tempUploadPath) {
+        await unlink(tempUploadPath).catch(() => {});
+      }
     }
   };
 }
@@ -60,8 +75,7 @@ export async function saveStepConfigHandler(req, res) {
   }
 
   const absPath = resolve(freecadRoot, configPath);
-  const rel = relative(freecadRoot, absPath);
-  if (rel.startsWith('..') || isAbsolute(rel)) {
+  if (!isPathInside(freecadRoot, absPath)) {
     return res.status(403).json({ error: 'Invalid config path' });
   }
 

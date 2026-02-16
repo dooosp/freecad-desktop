@@ -15,9 +15,32 @@ export const CURATED_EXAMPLES = [
   'ks_gear_housing.toml',
 ];
 
+function isAllowedOrigin(origin) {
+  if (!origin || origin === 'null') return true;
+  try {
+    const parsed = new URL(origin);
+    const isLocalHost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    const isHttp = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return isLocalHost && isHttp;
+  } catch {
+    return false;
+  }
+}
+
 export function createCorsMiddleware() {
   return (req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const origin = req?.headers?.origin;
+    if (!origin) {
+      res.header('Access-Control-Allow-Origin', '*');
+    } else if (!isAllowedOrigin(origin)) {
+      if (req.method === 'OPTIONS') return res.sendStatus(403);
+      return res.status(403).json({ error: 'Origin not allowed' });
+    } else if (origin === 'null') {
+      res.header('Access-Control-Allow-Origin', 'null');
+    } else {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+    }
     res.header('Access-Control-Allow-Headers', 'Content-Type');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(200);

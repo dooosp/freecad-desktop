@@ -1,12 +1,12 @@
 import React from 'react';
 
 const CHECK_LABELS = {
-  'DFM-01': { name: 'Wall Thickness', icon: '&#9638;' },
-  'DFM-02': { name: 'Hole Edge Distance', icon: '&#9675;' },
-  'DFM-03': { name: 'Hole Spacing', icon: '&#9673;' },
-  'DFM-04': { name: 'Fillet Radius', icon: '&#9711;' },
-  'DFM-05': { name: 'Drill Ratio', icon: '&#8609;' },
-  'DFM-06': { name: 'Undercut', icon: '&#9188;' },
+  'DFM-01': { name: 'Wall Thickness', icon: '▦' },
+  'DFM-02': { name: 'Hole Edge Distance', icon: '○' },
+  'DFM-03': { name: 'Hole Spacing', icon: '◉' },
+  'DFM-04': { name: 'Fillet Radius', icon: '◯' },
+  'DFM-05': { name: 'Drill Ratio', icon: '↱' },
+  'DFM-06': { name: 'Undercut', icon: '⏤' },
 };
 
 function getSeverityClass(severity) {
@@ -49,7 +49,7 @@ export default function DfmPanel({ data }) {
       <div className="dfm-checks">
         {checks.map((check, i) => {
           const id = check.code || check.id || check.check_id || `DFM-${String(i + 1).padStart(2, '0')}`;
-          const meta = CHECK_LABELS[id] || { name: id, icon: '&#9632;' };
+          const meta = CHECK_LABELS[id] || { name: id, icon: '■' };
           const severity = check.severity || check.status || 'ok';
           const message = check.message || check.detail || '';
           const recommendation = check.recommendation || check.suggestion || '';
@@ -57,7 +57,7 @@ export default function DfmPanel({ data }) {
           return (
             <div key={`${id}-${i}`} className={`dfm-card ${getSeverityClass(severity)}`}>
               <div className="dfm-card-header">
-                <span className="dfm-icon" dangerouslySetInnerHTML={{ __html: meta.icon }} />
+                <span className="dfm-icon">{meta.icon}</span>
                 <span className="dfm-id">{id}</span>
                 <span className="dfm-name">{meta.name}</span>
                 <span className="dfm-status">{getSeverityIcon(severity)}</span>

@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 
 const API_BASE = '/api';
+const ANALYZE_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function useBackend() {
   const [loading, setLoading] = useState(false);
@@ -53,9 +54,25 @@ export function useBackend() {
       setError(null);
       setProgress({ stage: null, status: 'starting', completed: [], total: 5 });
       let settled = false;
+      let timedOut = false;
+      let idleTimer = null;
 
       const controller = new AbortController();
       abortRef.current = controller;
+      const resetIdleTimer = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, ANALYZE_IDLE_TIMEOUT_MS);
+      };
+      const clearIdleTimer = () => {
+        if (idleTimer) {
+          clearTimeout(idleTimer);
+          idleTimer = null;
+        }
+      };
+      resetIdleTimer();
 
       const { profileName, ...pipelineOptions } = options;
 
@@ -87,6 +104,7 @@ export function useBackend() {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
+            resetIdleTimer();
 
             buffer += decoder.decode(value, { stream: true });
 
@@ -108,6 +126,7 @@ export function useBackend() {
                 }
 
                 if (currentEvent === 'stage') {
+                  resetIdleTimer();
                   if (data.status === 'done' && data.stage && !completed.includes(data.stage)) {
                     completed.push(data.stage);
                     if (data.cached) cachedStages.add(data.stage);
@@ -125,12 +144,14 @@ export function useBackend() {
                     error: data.error || null,
                   });
                 } else if (currentEvent === 'complete') {
+                  clearIdleTimer();
                   settled = true;
                   setProgress({ stage: 'done', status: 'done', completed, cached: [...cachedStages], total: 5 });
                   setLoading(false);
                   abortRef.current = null;
                   resolve(data);
                 } else if (currentEvent === 'error') {
+                  clearIdleTimer();
                   settled = true;
                   setProgress({ stage: 'error', status: 'error', completed, cached: [...cachedStages], total: 5 });
                   setLoading(false);
@@ -150,10 +171,17 @@ export function useBackend() {
           }
         })
         .catch((err) => {
+          clearIdleTimer();
           abortRef.current = null;
           if (err.name === 'AbortError') {
             setLoading(false);
             setProgress(null);
+            if (timedOut) {
+              const timeoutErr = new Error('Analyze stream timed out after 5 minutes of inactivity');
+              setError(timeoutErr.message);
+              reject(timeoutErr);
+              return;
+            }
             reject(err);
             return;
           }

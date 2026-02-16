@@ -3,6 +3,26 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 
+function disposeMaterial(material) {
+  if (!material) return;
+  const mats = Array.isArray(material) ? material : [material];
+  for (const mat of mats) {
+    for (const value of Object.values(mat)) {
+      if (value && typeof value === 'object' && typeof value.dispose === 'function') {
+        value.dispose();
+      }
+    }
+    mat.dispose?.();
+  }
+}
+
+function disposeMesh(mesh, scene) {
+  if (!mesh) return;
+  scene?.remove(mesh);
+  mesh.geometry?.dispose?.();
+  disposeMaterial(mesh.material);
+}
+
 export default function ModelViewer({ stlPath }) {
   const containerRef = useRef(null);
   const rendererRef = useRef(null);
@@ -78,8 +98,24 @@ export default function ModelViewer({ stlPath }) {
     return () => {
       cancelAnimationFrame(frameRef.current);
       window.removeEventListener('resize', handleResize);
+      if (typeof controlsRef.current?.dispose === 'function') {
+        controlsRef.current.dispose();
+      }
+      disposeMesh(meshRef.current, scene);
+      meshRef.current = null;
+      if (typeof scene?.traverse === 'function') {
+        scene.traverse((obj) => {
+          if (obj.isMesh) {
+            obj.geometry?.dispose?.();
+            disposeMaterial(obj.material);
+          }
+        });
+      }
+      renderer.renderLists?.dispose?.();
       renderer.dispose();
-      container.removeChild(renderer.domElement);
+      if (renderer.domElement.parentNode === container) {
+        container.removeChild(renderer.domElement);
+      }
     };
   }, []);
 
@@ -89,9 +125,8 @@ export default function ModelViewer({ stlPath }) {
 
     // Remove previous mesh
     if (meshRef.current) {
-      sceneRef.current.remove(meshRef.current);
-      meshRef.current.geometry.dispose();
-      meshRef.current.material.dispose();
+      disposeMesh(meshRef.current, sceneRef.current);
+      meshRef.current = null;
     }
 
     const loader = new STLLoader();

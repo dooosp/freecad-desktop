@@ -75,7 +75,7 @@ export async function buildPack(options) {
   if (include.step) {
     const stepPath = getExportPathByFormat(results.model, 'step');
     const stepSrc = toOutputPath(stepPath, pathRoots);
-    if (stepSrc) {
+    if (stepSrc && existsSync(stepSrc)) {
       const file = basename(stepSrc);
       copyFileSync(stepSrc, join(dirs.model, file));
       includedModelFiles.push(file);

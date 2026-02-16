@@ -175,7 +175,13 @@ export class AnalysisCache {
     // Sort oldest first
     entries.sort((a, b) => a.mtime - b.mtime);
 
+    let iterations = 0;
     while (totalSize > MAX_CACHE_BYTES && entries.length > 0) {
+      iterations += 1;
+      if (iterations > 1000) {
+        console.error('[analysis-cache] Eviction loop limit reached (1000), stopping early');
+        break;
+      }
       const oldest = entries.shift();
       await unlink(oldest.path).catch(() => {});
       totalSize -= oldest.size;
