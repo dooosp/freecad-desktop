@@ -209,9 +209,13 @@ export function useBackend() {
   const runCost = useCallback((configPath, opts) => {
     return call('/cost', { configPath, ...opts });
   }, [call]);
+  /** @param {string} description - Natural language design description @returns {Promise<{toml: string, report: object}>} */
   const runDesign = useCallback((description) => call('/design', { description, mode: 'design' }), [call]);
+  /** @param {string} toml - TOML config string to review @returns {Promise<{issues: object[], correctedToml?: string}>} */
   const runDesignReview = useCallback((toml) => call('/design', { toml, mode: 'review' }), [call]);
+  /** @param {string} toml - TOML config string to build @returns {Promise<{exports: object[], configPath: string}>} */
   const runDesignBuild = useCallback((toml) => call('/design', { toml, mode: 'build' }), [call]);
+  /** @param {string} configPath - Config file path @param {object} femConfig - FEM analysis settings @returns {Promise<object>} */
   const runFem = useCallback((configPath, femConfig) => call('/fem', { configPath, fem: femConfig }), [call]);
   const generateReport = useCallback((configPath, opts) => {
     return call('/report', {

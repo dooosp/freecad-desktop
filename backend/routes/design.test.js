@@ -97,6 +97,28 @@ describe('design route handler', () => {
     });
   });
 
+  it('build mode parses TOML via loadConfig and passes config to runScript', async () => {
+    const loadConfig = vi.fn(async () => ({ name: 'gear', parts: [] }));
+    const runScript = vi.fn(async () => ({ exports: [{ format: 'step', path: 'out.step' }] }));
+    const handler = createDesignHandler({});
+    const req = createMockReq({
+      body: { mode: 'build', toml: 'name = "gear"' },
+      appLocals: { freecadRoot: '/tmp/fc', runScript, loadConfig },
+    });
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(loadConfig).toHaveBeenCalledTimes(1);
+    expect(runScript).toHaveBeenCalledWith(
+      'create_model.py',
+      { name: 'gear', parts: [] },
+      { timeout: 120_000 },
+    );
+    expect(res.jsonBody).toHaveProperty('exports');
+    expect(res.jsonBody).toHaveProperty('configPath');
+  });
+
   it('throws 400 for unknown mode', async () => {
     const handler = createDesignHandler({
       designFromTextFn: vi.fn(),

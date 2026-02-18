@@ -103,4 +103,18 @@ describe('AppAnalysisSection', () => {
     expect(screen.getByRole('button', { name: 'Tolerance' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: '↻ ...' }).hasAttribute('disabled')).toBe(true);
   });
+
+  it('disables Rerun button when analysisTab is ai-design or fem', () => {
+    const shell = createShell({ projectState: { analysisTab: 'ai-design' } });
+    useAppShellMock.mockReturnValue(shell);
+    const { rerender } = render(<AppAnalysisSection />);
+
+    expect(screen.getByRole('button', { name: '↻ Rerun' }).hasAttribute('disabled')).toBe(true);
+
+    const shell2 = createShell({ projectState: { analysisTab: 'fem', configPath: 'cfg.toml' } });
+    useAppShellMock.mockReturnValue(shell2);
+    rerender(<AppAnalysisSection />);
+
+    expect(screen.getByRole('button', { name: '↻ Rerun' }).hasAttribute('disabled')).toBe(true);
+  });
 });

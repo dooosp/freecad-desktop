@@ -70,7 +70,7 @@ export default function AiDesignPanel({ backend, onBuildComplete }) {
 
   return (
     <div className="ai-design-panel">
-      {error && <div className="ai-design-error">{error}</div>}
+      {error && <div className="panel-error">{error}</div>}
 
       {step === STEP_INPUT && (
         <div className="ai-design-input">

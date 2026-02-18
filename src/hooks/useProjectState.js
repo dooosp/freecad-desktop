@@ -171,6 +171,7 @@ export function useProjectState({ backend, activeProfile, setActiveProfile }) {
 
   return {
     configPath,
+    setConfigPath,
     examples,
     results,
     setResults,

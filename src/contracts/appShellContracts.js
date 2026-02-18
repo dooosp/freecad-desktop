@@ -30,14 +30,15 @@
  * @property {object|null} stepImportData
  * @property {'3d'|'drawing'|'pdf'} viewerTab
  * @property {(tab: '3d'|'drawing'|'pdf') => void} setViewerTab
- * @property {'dfm'|'tolerance'|'cost'} analysisTab
- * @property {(tab: 'dfm'|'tolerance'|'cost') => void} setAnalysisTab
+ * @property {'dfm'|'tolerance'|'cost'|'ai-design'|'fem'} analysisTab
+ * @property {(tab: 'dfm'|'tolerance'|'cost'|'ai-design'|'fem') => void} setAnalysisTab
  * @property {object} settings
  * @property {(next: object) => void} setSettings
  * @property {string|null} rerunning
  * @property {(path: string, rawFile?: File|string) => Promise<void>} handleFileSelect
  * @property {() => Promise<void>} handleAnalyze
- * @property {(stage: 'dfm'|'tolerance'|'cost'|'drawing') => Promise<void>} handleRerunStage
+ * @property {(stage: 'dfm'|'tolerance'|'cost'|'drawing'|'ai-design'|'fem') => Promise<void>} handleRerunStage
+ * @property {(path: string|null) => void} setConfigPath
  * @property {(cfgPath: string) => void} handleUseStepConfig
  * @property {(cfgPath: string, toml: string) => Promise<void>} handleSaveStepConfig
  * @property {() => Promise<void>} handleSaveProject

@@ -54,7 +54,7 @@ export default function AppAnalysisSection() {
         <span className="tab-spacer" />
         <button
           className="btn-rerun"
-          disabled={projectState.rerunning !== null || backend.loading}
+          disabled={projectState.rerunning !== null || backend.loading || ['ai-design', 'fem'].includes(projectState.analysisTab)}
           onClick={() => projectState.handleRerunStage(projectState.analysisTab)}
           title={`Re-run ${projectState.analysisTab.toUpperCase()} only`}
         >
@@ -74,7 +74,7 @@ export default function AppAnalysisSection() {
             <CostPanel data={projectState.results.cost} />
           )}
           {projectState.analysisTab === 'ai-design' && (
-            <AiDesignPanel backend={backend} />
+            <AiDesignPanel backend={backend} onBuildComplete={(r) => projectState.setConfigPath(r.configPath)} />
           )}
           {projectState.analysisTab === 'fem' && (
             <FemPanel backend={backend} configPath={projectState.configPath} />

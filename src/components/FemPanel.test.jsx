@@ -53,4 +53,22 @@ describe('FemPanel', () => {
     expect(screen.getByText('1.72')).toBeTruthy();
     expect(screen.getByText(/12500 nodes/)).toBeTruthy();
   });
+
+  it('does not render frequencies card when frequencies is empty array', async () => {
+    const backend = {
+      runFem: vi.fn(async () => ({
+        max_displacement: 0.01,
+        max_stress: 50,
+        safety_factor: 3.0,
+        frequencies: [],
+        mesh_info: { nodes: 100, elements: 50 },
+      })),
+    };
+    render(<FemPanel backend={backend} configPath="configs/test.toml" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run FEM' }));
+    await screen.findByText('Results');
+
+    expect(screen.queryByText(/Natural Frequencies/)).toBeNull();
+  });
 });

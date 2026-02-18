@@ -4,7 +4,7 @@ import { createHttpError } from '../../lib/async-handler.js';
 
 export function createDesignHandler({ designFromTextFn, reviewTomlFn, validateTomlFn } = {}) {
   return async function designHandler(req, res) {
-    const { freecadRoot, runScript } = req.app.locals;
+    const { freecadRoot, runScript, loadConfig } = req.app.locals;
     const { mode } = req.body;
 
     if (!mode) throw createHttpError(400, 'mode required (design|review|build)');
@@ -47,7 +47,8 @@ export function createDesignHandler({ designFromTextFn, reviewTomlFn, validateTo
       const configPath = join(outDir, `design_${Date.now()}.toml`);
       await writeFile(configPath, toml, 'utf8');
 
-      const result = await runScript('create_model.py', { _configPath: configPath }, { timeout: 120_000 });
+      const config = await loadConfig(configPath);
+      const result = await runScript('create_model.py', config, { timeout: 120_000 });
       return res.json({ ...result, configPath: configPath.replace(freecadRoot + '/', '') });
     }
 

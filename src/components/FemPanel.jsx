@@ -42,6 +42,7 @@ export default function FemPanel({ backend, configPath }) {
   };
 
   const handleRun = async () => {
+    if (!configPath) return;
     setBusy(true);
     setError(null);
     try {
@@ -78,16 +79,16 @@ export default function FemPanel({ backend, configPath }) {
     <div className="fem-panel">
       <div className="fem-settings">
         <div className="fem-row">
-          <label>Analysis Type</label>
-          <select value={analysisType} onChange={(e) => setAnalysisType(e.target.value)}>
+          <label htmlFor="fem-analysis-type">Analysis Type</label>
+          <select id="fem-analysis-type" value={analysisType} onChange={(e) => setAnalysisType(e.target.value)} disabled={busy}>
             <option value="static">Static</option>
             <option value="frequency">Modal (Frequency)</option>
           </select>
         </div>
 
         <div className="fem-row">
-          <label>Material</label>
-          <select value={material} onChange={(e) => setMaterial(e.target.value)}>
+          <label htmlFor="fem-material">Material</label>
+          <select id="fem-material" value={material} onChange={(e) => setMaterial(e.target.value)} disabled={busy}>
             {MATERIALS.map((m) => (
               <option key={m.value} value={m.value}>{m.label}</option>
             ))}
@@ -96,33 +97,33 @@ export default function FemPanel({ backend, configPath }) {
 
         <div className="fem-row fem-row-pair">
           <div>
-            <label>Mesh Max</label>
-            <input type="number" min={0.1} step={0.5} value={meshMaxSize}
-              onChange={(e) => setMeshMaxSize(e.target.value)} />
+            <label htmlFor="fem-mesh-max">Mesh Max</label>
+            <input id="fem-mesh-max" type="number" min={0.1} step={0.5} value={meshMaxSize}
+              onChange={(e) => setMeshMaxSize(e.target.value)} disabled={busy} />
           </div>
           <div>
-            <label>Mesh Min</label>
-            <input type="number" min={0.1} step={0.5} value={meshMinSize}
-              onChange={(e) => setMeshMinSize(e.target.value)} />
+            <label htmlFor="fem-mesh-min">Mesh Min</label>
+            <input id="fem-mesh-min" type="number" min={0.1} step={0.5} value={meshMinSize}
+              onChange={(e) => setMeshMinSize(e.target.value)} disabled={busy} />
           </div>
         </div>
 
         {analysisType === 'frequency' && (
           <div className="fem-row">
-            <label>Number of Modes</label>
-            <input type="number" min={1} max={20} value={numModes}
-              onChange={(e) => setNumModes(e.target.value)} />
+            <label htmlFor="fem-num-modes">Number of Modes</label>
+            <input id="fem-num-modes" type="number" min={1} max={20} value={numModes}
+              onChange={(e) => setNumModes(e.target.value)} disabled={busy} />
           </div>
         )}
 
         <div className="fem-constraints">
           <div className="fem-constraints-header">
             <h4>Constraints</h4>
-            <button className="btn btn-sm" onClick={addConstraint}>+ Add</button>
+            <button className="btn btn-sm" onClick={addConstraint} disabled={busy}>+ Add</button>
           </div>
           {constraints.map((c, i) => (
             <div key={i} className="fem-constraint-row">
-              <select value={c.type} onChange={(e) => updateConstraint(i, 'type', e.target.value)}>
+              <select value={c.type} onChange={(e) => updateConstraint(i, 'type', e.target.value)} disabled={busy}>
                 {CONSTRAINT_TYPES.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
@@ -132,18 +133,19 @@ export default function FemPanel({ backend, configPath }) {
                 placeholder="Face1, Face2"
                 value={c.faces}
                 onChange={(e) => updateConstraint(i, 'faces', e.target.value)}
+                disabled={busy}
               />
               {c.type !== 'fixed' && (
                 <div className="fem-force-inputs">
                   <input type="number" placeholder="X" value={c.valueX}
-                    onChange={(e) => updateConstraint(i, 'valueX', e.target.value)} />
+                    onChange={(e) => updateConstraint(i, 'valueX', e.target.value)} disabled={busy} />
                   <input type="number" placeholder="Y" value={c.valueY}
-                    onChange={(e) => updateConstraint(i, 'valueY', e.target.value)} />
+                    onChange={(e) => updateConstraint(i, 'valueY', e.target.value)} disabled={busy} />
                   <input type="number" placeholder="Z" value={c.valueZ}
-                    onChange={(e) => updateConstraint(i, 'valueZ', e.target.value)} />
+                    onChange={(e) => updateConstraint(i, 'valueZ', e.target.value)} disabled={busy} />
                 </div>
               )}
-              <button className="btn btn-sm btn-danger" onClick={() => removeConstraint(i)}>x</button>
+              <button className="btn btn-sm btn-danger" onClick={() => removeConstraint(i)} disabled={busy} aria-label={`Remove constraint ${i + 1}`}>x</button>
             </div>
           ))}
         </div>
@@ -157,7 +159,7 @@ export default function FemPanel({ backend, configPath }) {
         </button>
       </div>
 
-      {error && <div className="fem-error">{error}</div>}
+      {error && <div className="panel-error">{error}</div>}
 
       {result && (
         <div className="fem-results">
@@ -183,7 +185,7 @@ export default function FemPanel({ backend, configPath }) {
                 </span>
               </div>
             )}
-            {result.frequencies && (
+            {result.frequencies?.length > 0 && (
               <div className="fem-result-card full">
                 <span className="label">Natural Frequencies</span>
                 <span className="value">
