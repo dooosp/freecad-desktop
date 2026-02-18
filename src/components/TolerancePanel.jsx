@@ -7,15 +7,13 @@ export default function TolerancePanel({ data }) {
   const histRef = useRef(null);
   const chartInstance = useRef(null);
 
-  if (!data) return null;
-
-  const fits = data.fits || data.fit_pairs || [];
-  const stackup = data.stackup || data.tolerance_stackup || null;
-  const monteCarlo = data.monte_carlo || null;
+  const fits = data?.fits || data?.fit_pairs || [];
+  const stackup = data?.stackup || data?.tolerance_stackup || null;
+  const monteCarlo = data?.monte_carlo || null;
 
   // Monte Carlo histogram
   useEffect(() => {
-    if (!monteCarlo?.histogram || !histRef.current) return;
+    if (!data || !monteCarlo?.histogram || !histRef.current) return;
 
     if (chartInstance.current) {
       chartInstance.current.destroy();
@@ -53,7 +51,9 @@ export default function TolerancePanel({ data }) {
     return () => {
       if (chartInstance.current) chartInstance.current.destroy();
     };
-  }, [monteCarlo]);
+  }, [data, monteCarlo]);
+
+  if (!data) return null;
 
   return (
     <div className="tolerance-panel">

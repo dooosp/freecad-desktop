@@ -187,4 +187,30 @@ describe('report-template route handlers', () => {
     expect(missingRes.statusCode).toBe(404);
     expect(missingRes.jsonBody.error).toMatch(/Template not found/i);
   });
+
+  it('rejects path traversal attempts in GET/PUT/DELETE', async () => {
+    const { freecadRoot } = await makeTemplatesDir();
+
+    const traversalNames = ['../../etc/passwd', '../secret', 'foo/../../bar'];
+
+    for (const name of traversalNames) {
+      const getReq = createMockReq({ params: { name }, appLocals: { freecadRoot } });
+      const getRes = createMockRes();
+      await getReportTemplateHandler(getReq, getRes);
+      expect(getRes.statusCode).toBe(400);
+      expect(getRes.jsonBody.error).toMatch(/Invalid name format/);
+
+      const putReq = createMockReq({ params: { name }, body: { label: 'x' }, appLocals: { freecadRoot } });
+      const putRes = createMockRes();
+      await updateReportTemplateHandler(putReq, putRes);
+      expect(putRes.statusCode).toBe(400);
+      expect(putRes.jsonBody.error).toMatch(/Invalid name format/);
+
+      const delReq = createMockReq({ params: { name }, appLocals: { freecadRoot } });
+      const delRes = createMockRes();
+      await deleteReportTemplateHandler(delReq, delRes);
+      expect(delRes.statusCode).toBe(400);
+      expect(delRes.jsonBody.error).toMatch(/Invalid name format/);
+    }
+  });
 });

@@ -131,15 +131,15 @@ export default function ProfileCompareModal({ profiles, configPath, settings, ba
                 <div className="compare-bars">
                   <div className="compare-bar-label">{rA.name === '_default' ? 'Default' : rA.name}</div>
                   <div className="compare-bar-track">
-                    <div className="compare-bar-fill a" style={{
+                    <div className="compare-bar-fill bar-a" style={{
                       width: `${Math.min(100, (rA.cost.unit_cost / Math.max(rA.cost.unit_cost, rB.cost.unit_cost)) * 100)}%`
-                    }}>{fmt(rA.cost.unit_cost)} KRW</div>
+                    }}><span className="compare-bar-value">{fmt(rA.cost.unit_cost)} KRW</span></div>
                   </div>
                   <div className="compare-bar-label">{rB.name === '_default' ? 'Default' : rB.name}</div>
                   <div className="compare-bar-track">
-                    <div className="compare-bar-fill b" style={{
+                    <div className="compare-bar-fill bar-b" style={{
                       width: `${Math.min(100, (rB.cost.unit_cost / Math.max(rA.cost.unit_cost, rB.cost.unit_cost)) * 100)}%`
-                    }}>{fmt(rB.cost.unit_cost)} KRW</div>
+                    }}><span className="compare-bar-value">{fmt(rB.cost.unit_cost)} KRW</span></div>
                   </div>
                 </div>
               )}

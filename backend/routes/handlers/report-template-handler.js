@@ -36,8 +36,13 @@ export async function listReportTemplatesHandler(req, res) {
 }
 
 export async function getReportTemplateHandler(req, res) {
+  const { name } = req.params;
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid name format (use alphanumeric, _, -)' });
+  }
+
   const freecadRoot = req.app.locals.freecadRoot;
-  const templatePath = join(getTemplatesDir(freecadRoot), `${req.params.name}.json`);
+  const templatePath = join(getTemplatesDir(freecadRoot), `${name}.json`);
 
   try {
     const content = await readFile(templatePath, 'utf8');
@@ -84,8 +89,13 @@ export async function createReportTemplateHandler(req, res) {
 }
 
 export async function updateReportTemplateHandler(req, res) {
+  const { name } = req.params;
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid name format (use alphanumeric, _, -)' });
+  }
+
   const freecadRoot = req.app.locals.freecadRoot;
-  const templatePath = join(getTemplatesDir(freecadRoot), `${req.params.name}.json`);
+  const templatePath = join(getTemplatesDir(freecadRoot), `${name}.json`);
 
   try {
     const existing = await readFile(templatePath, 'utf8');
@@ -107,12 +117,16 @@ export async function updateReportTemplateHandler(req, res) {
 }
 
 export async function deleteReportTemplateHandler(req, res) {
-  if (req.params.name === '_default') {
+  const { name } = req.params;
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid name format (use alphanumeric, _, -)' });
+  }
+  if (name === '_default') {
     return res.status(400).json({ error: 'Cannot delete default template' });
   }
 
   const freecadRoot = req.app.locals.freecadRoot;
-  const templatePath = join(getTemplatesDir(freecadRoot), `${req.params.name}.json`);
+  const templatePath = join(getTemplatesDir(freecadRoot), `${name}.json`);
 
   try {
     await unlink(templatePath);

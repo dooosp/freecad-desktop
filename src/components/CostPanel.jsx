@@ -9,17 +9,15 @@ export default function CostPanel({ data }) {
   const pieChart = useRef(null);
   const curveChart = useRef(null);
 
-  if (!data) return null;
-
-  const breakdown = data.breakdown || {};
-  const batchCurve = data.batch_curve || [];
-  const totalCost = data.total_cost || 0;
-  const dfmSavings = data.dfm_savings || null;
-  const processComparison = data.process_comparison || [];
+  const breakdown = data?.breakdown || {};
+  const batchCurve = data?.batch_curve || [];
+  const totalCost = data?.total_cost || 0;
+  const dfmSavings = data?.dfm_savings || null;
+  const processComparison = data?.process_comparison || [];
 
   // Cost breakdown pie chart
   useEffect(() => {
-    if (!pieRef.current || !Object.keys(breakdown).length) return;
+    if (!data || !pieRef.current || !Object.keys(breakdown).length) return;
     if (pieChart.current) pieChart.current.destroy();
 
     const labels = Object.keys(breakdown).map(k => {
@@ -59,11 +57,11 @@ export default function CostPanel({ data }) {
     });
 
     return () => { if (pieChart.current) pieChart.current.destroy(); };
-  }, [breakdown, totalCost]);
+  }, [data, breakdown, totalCost]);
 
   // Batch curve
   useEffect(() => {
-    if (!curveRef.current || !batchCurve.length) return;
+    if (!data || !curveRef.current || !batchCurve.length) return;
     if (curveChart.current) curveChart.current.destroy();
 
     curveChart.current = new Chart(curveRef.current, {
@@ -100,7 +98,9 @@ export default function CostPanel({ data }) {
     });
 
     return () => { if (curveChart.current) curveChart.current.destroy(); };
-  }, [batchCurve]);
+  }, [data, batchCurve]);
+
+  if (!data) return null;
 
   return (
     <div className="cost-panel">

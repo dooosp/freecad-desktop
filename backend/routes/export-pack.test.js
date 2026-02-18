@@ -29,7 +29,7 @@ describe('export-pack route handler', () => {
   it('returns 400 when configPath is missing', async () => {
     const req = createMockReq({
       body: { include: { dxf: true } },
-      appLocals: { freecadRoot: '/tmp/noop' },
+      appLocals: { freecadRoot: '/tmp/noop', loadConfig: vi.fn() },
     });
     const res = createMockRes();
 
@@ -44,12 +44,7 @@ describe('export-pack route handler', () => {
     const freecadRoot = await mkdtemp(join(tmpdir(), 'export-pack-route-test-'));
     tempRoots.push(freecadRoot);
 
-    await mkdir(join(freecadRoot, 'lib'), { recursive: true });
-    await writeFile(
-      join(freecadRoot, 'lib', 'config-loader.js'),
-      'export async function loadConfig(){ return { name: "loaded_cfg" }; }\n',
-      'utf8'
-    );
+    const loadConfig = vi.fn(async () => ({ name: 'loaded_cfg' }));
 
     const req = createMockReq({
       body: {
@@ -58,7 +53,7 @@ describe('export-pack route handler', () => {
         include: { dxf: true, report: true },
         analysisResults: { drawing: { drawing_paths: [] } },
       },
-      appLocals: { freecadRoot },
+      appLocals: { freecadRoot, loadConfig },
     });
     const res = createMockRes();
 

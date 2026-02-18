@@ -77,16 +77,12 @@ body {
 
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-}
-.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
-
+.btn-primary,
 .btn-accent {
   background: var(--accent);
   color: #fff;
 }
+.btn-primary:hover:not(:disabled),
 .btn-accent:hover:not(:disabled) { background: var(--accent-hover); }
 
 .btn-secondary {
@@ -1335,6 +1331,37 @@ body {
 .compare-selectors .form-group {
   flex: 1;
   margin-bottom: 0;
+}
+
+.compare-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.compare-select label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.compare-select select {
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.compare-vs {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 .compare-results {

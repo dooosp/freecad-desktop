@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { mkdtemp, access } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createDesignHandler } from './handlers/design-handler.js';
 import { createMockReq, createMockRes } from './handler-test-helpers.js';
@@ -117,6 +120,30 @@ describe('design route handler', () => {
     );
     expect(res.jsonBody).toHaveProperty('exports');
     expect(res.jsonBody).toHaveProperty('configPath');
+  });
+
+  it('cleans up tmp file after review mode', async () => {
+    const freecadRoot = await mkdtemp(join(tmpdir(), 'design-review-'));
+    let capturedPath = null;
+    const reviewTomlFn = vi.fn(async (tmpPath) => {
+      capturedPath = tmpPath;
+      return { issues: [], score: 95 };
+    });
+    const validateTomlFn = vi.fn(() => ({ valid: true, errors: [] }));
+
+    const handler = createDesignHandler({ reviewTomlFn, validateTomlFn });
+    const req = createMockReq({
+      body: { mode: 'review', toml: 'name = "test"' },
+      appLocals: { freecadRoot, runScript: vi.fn(), loadConfig: vi.fn() },
+    });
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(capturedPath).toBeTruthy();
+    // Tmp file should be deleted after handler completes
+    await expect(access(capturedPath)).rejects.toBeTruthy();
   });
 
   it('throws 400 for unknown mode', async () => {

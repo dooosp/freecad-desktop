@@ -1,8 +1,15 @@
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
 import { buildPack } from '../../lib/pack-builder.js';
+
+function isPathInside(baseDir, targetPath) {
+  const base = resolve(baseDir);
+  const target = resolve(targetPath);
+  return target === base || target.startsWith(`${base}${sep}`);
+}
 
 export async function exportPackHandler(req, res) {
   const freecadRoot = req.app.locals.freecadRoot;
+  const { loadConfig } = req.app.locals;
   const {
     configPath,
     profileName = '',
@@ -17,9 +24,13 @@ export async function exportPackHandler(req, res) {
 
   if (!configPath) return res.status(400).json({ error: 'configPath required' });
 
+  const absConfigPath = resolve(freecadRoot, configPath);
+  if (!isPathInside(freecadRoot, absConfigPath)) {
+    return res.status(403).json({ error: 'configPath must be inside project root' });
+  }
+
   try {
-    const { loadConfig } = await import(`${freecadRoot}/lib/config-loader.js`);
-    const config = await loadConfig(resolve(freecadRoot, configPath));
+    const config = await loadConfig(absConfigPath);
 
     const packOptions = {
       freecadRoot,

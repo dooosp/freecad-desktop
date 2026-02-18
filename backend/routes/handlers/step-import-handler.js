@@ -36,6 +36,9 @@ export function createStepImportHandler({
         await writeFileFn(stepFilePath, uploaded);
       } else if (req.body?.filePath) {
         stepFilePath = resolve(req.body.filePath);
+        if (!isPathInside(freecadRoot, stepFilePath)) {
+          return res.status(403).json({ error: 'File path must be inside project root' });
+        }
         stepName = basename(stepFilePath, extname(stepFilePath));
       } else {
         return res.status(400).json({ error: 'No STEP file provided' });

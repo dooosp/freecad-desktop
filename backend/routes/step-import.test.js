@@ -37,10 +37,13 @@ describe('step import route handlers', () => {
     const freecadRoot = await mkdtemp(join(tmpdir(), 'step-import-handler-'));
     tempRoots.push(freecadRoot);
     await mkdir(join(freecadRoot, 'configs', 'imports'), { recursive: true });
+    // Create a STEP file inside freecadRoot so path validation passes
+    const stepFilePath = join(freecadRoot, 'source.step');
+    await writeFile(stepFilePath, 'STEPDATA', 'utf8');
 
     const analysis = {
       success: true,
-      source_step: '/tmp/source.step',
+      source_step: stepFilePath,
       suggested_config: { name: 'imported_source' },
     };
     const analyzeStepFn = vi.fn(async () => analysis);
@@ -48,14 +51,14 @@ describe('step import route handlers', () => {
     const handler = createStepImportHandler({ analyzeStepFn, generateConfigFromAnalysisFn });
 
     const req = createMockReq({
-      body: { filePath: '/tmp/source.step' },
+      body: { filePath: stepFilePath },
       appLocals: { freecadRoot },
     });
     const res = createMockRes();
 
     await handler(req, res);
 
-    expect(analyzeStepFn).toHaveBeenCalledWith(freecadRoot, '/tmp/source.step');
+    expect(analyzeStepFn).toHaveBeenCalledWith(freecadRoot, stepFilePath);
     expect(generateConfigFromAnalysisFn).toHaveBeenCalledWith(analysis);
     expect(res.statusCode).toBe(200);
     expect(res.jsonBody.success).toBe(true);
@@ -101,7 +104,29 @@ describe('step import route handlers', () => {
     expect(copiedData).toBe('STEPDATA');
   });
 
+  it('returns 403 when filePath is outside freecadRoot', async () => {
+    const handler = createStepImportHandler({
+      analyzeStepFn: vi.fn(),
+      generateConfigFromAnalysisFn: vi.fn(),
+    });
+    const req = createMockReq({
+      body: { filePath: '/tmp/outside.step' },
+      appLocals: { freecadRoot: '/tmp/freecad-root' },
+    });
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.jsonBody.error).toMatch(/inside project root/i);
+  });
+
   it('returns 500 when analyzeStep fails', async () => {
+    const freecadRoot = await mkdtemp(join(tmpdir(), 'step-import-fail-'));
+    tempRoots.push(freecadRoot);
+    const stepFilePath = join(freecadRoot, 'fail.step');
+    await writeFile(stepFilePath, 'STEPDATA', 'utf8');
+
     const handler = createStepImportHandler({
       analyzeStepFn: vi.fn(async () => {
         throw new Error('analyze failed');
@@ -109,8 +134,8 @@ describe('step import route handlers', () => {
       generateConfigFromAnalysisFn: vi.fn(),
     });
     const req = createMockReq({
-      body: { filePath: '/tmp/fail.step' },
-      appLocals: { freecadRoot: '/tmp/freecad-root' },
+      body: { filePath: stepFilePath },
+      appLocals: { freecadRoot },
     });
     const res = createMockRes();
 

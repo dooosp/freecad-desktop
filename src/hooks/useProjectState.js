@@ -163,6 +163,10 @@ export function useProjectState({ backend, activeProfile, setActiveProfile }) {
         return;
       }
       const { projectData } = await backend.openProject(recent[0].path);
+      if (!projectData) {
+        backend.setError('Project data is empty');
+        return;
+      }
       restoreProject(projectData);
     } catch {
       // error set by backend

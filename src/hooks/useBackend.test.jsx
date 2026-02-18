@@ -427,24 +427,16 @@ describe('useBackend', () => {
       if (tagName !== 'a') {
         return realCreateElement(tagName, options);
       }
-      return {
-        click,
-        set href(value) {
-          this._href = value;
-        },
-        get href() {
-          return this._href;
-        },
-        set download(value) {
-          this._download = value;
-        },
-        get download() {
-          return this._download;
-        },
-      };
+      const el = realCreateElement('a');
+      el.click = click;
+      return el;
     });
 
     const { result } = renderHook(() => useBackend());
+
+    // Spy after renderHook so React can mount its container first
+    const appendChildSpy = vi.spyOn(document.body, 'appendChild');
+    const removeChildSpy = vi.spyOn(document.body, 'removeChild');
 
     let exported;
     await act(async () => {
@@ -458,7 +450,12 @@ describe('useBackend', () => {
     );
     expect(globalThis.document.createElement).toHaveBeenCalledWith('a');
     expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(appendChildSpy).toHaveBeenCalled();
     expect(click).toHaveBeenCalledTimes(1);
+    expect(removeChildSpy).toHaveBeenCalled();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-zip');
+
+    appendChildSpy.mockRestore();
+    removeChildSpy.mockRestore();
   });
 });

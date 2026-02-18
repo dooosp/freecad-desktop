@@ -37,7 +37,7 @@ export function useProfileState({ backend }) {
         if (profs) setProfiles(profs);
       })
       .catch(() => setProfiles([]));
-  }, [backend]);
+  }, [backend.getProfiles]);
 
   useEffect(() => {
     if (activeProfile && activeProfile !== '_default') {
@@ -47,7 +47,7 @@ export function useProfileState({ backend }) {
       return;
     }
     setActiveProfileData(null);
-  }, [activeProfile, backend]);
+  }, [activeProfile, backend.getProfile]);
 
   const handleProfileChange = useCallback((name) => {
     setActiveProfile(name);

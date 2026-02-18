@@ -1,5 +1,5 @@
 import { resolve, join } from 'node:path';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir, unlink } from 'node:fs/promises';
 import { createHttpError } from '../../lib/async-handler.js';
 
 export function createDesignHandler({ designFromTextFn, reviewTomlFn, validateTomlFn } = {}) {
@@ -33,9 +33,13 @@ export function createDesignHandler({ designFromTextFn, reviewTomlFn, validateTo
       const tmpPath = join(tmpDir, `review_${Date.now()}.toml`);
       await writeFile(tmpPath, toml, 'utf8');
 
-      const validation = validateFn(toml);
-      const review = await reviewFn(tmpPath);
-      return res.json({ ...review, validation });
+      try {
+        const validation = validateFn(toml);
+        const review = await reviewFn(tmpPath);
+        return res.json({ ...review, validation });
+      } finally {
+        await unlink(tmpPath).catch(() => {});
+      }
     }
 
     if (mode === 'build') {
