@@ -4,6 +4,8 @@ import { useAppShell } from '../../contexts/AppShellContext.jsx';
 
 const TolerancePanel = lazy(() => import('../TolerancePanel.jsx'));
 const CostPanel = lazy(() => import('../CostPanel.jsx'));
+const AiDesignPanel = lazy(() => import('../AiDesignPanel.jsx'));
+const FemPanel = lazy(() => import('../FemPanel.jsx'));
 
 export default function AppAnalysisSection() {
   const { backend, projectState } = useAppShell();
@@ -36,6 +38,19 @@ export default function AppAnalysisSection() {
         >
           Cost
         </button>
+        <button
+          className={`tab ${projectState.analysisTab === 'ai-design' ? 'active' : ''}`}
+          onClick={() => projectState.setAnalysisTab('ai-design')}
+        >
+          AI Design
+        </button>
+        <button
+          className={`tab ${projectState.analysisTab === 'fem' ? 'active' : ''}`}
+          onClick={() => projectState.setAnalysisTab('fem')}
+          disabled={!projectState.configPath}
+        >
+          FEM
+        </button>
         <span className="tab-spacer" />
         <button
           className="btn-rerun"
@@ -57,6 +72,12 @@ export default function AppAnalysisSection() {
           )}
           {projectState.analysisTab === 'cost' && projectState.results?.cost && (
             <CostPanel data={projectState.results.cost} />
+          )}
+          {projectState.analysisTab === 'ai-design' && (
+            <AiDesignPanel backend={backend} />
+          )}
+          {projectState.analysisTab === 'fem' && (
+            <FemPanel backend={backend} configPath={projectState.configPath} />
           )}
         </Suspense>
       </div>

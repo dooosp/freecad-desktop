@@ -56,6 +56,8 @@ function createNoopRouters() {
     cacheRouter: noop,
     projectRouter: noop,
     diagnosticsRouter: noop,
+    designRouter: noop,
+    femRouter: noop,
   };
 }
 

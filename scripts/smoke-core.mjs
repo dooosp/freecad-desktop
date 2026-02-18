@@ -99,6 +99,40 @@ export async function mockRequest(path, { method = 'GET', body = {} } = {}) {
   }
   if (method === 'POST' && path === '/step/save-config') return { success: true };
 
+  if (method === 'POST' && path === '/design') {
+    const mode = body?.mode;
+    if (mode === 'design') {
+      return {
+        toml: 'name = "mock_design"\n[parts.shaft]\ntype = "cylinder"\nradius = 10\nlength = 80',
+        report: { mechanism_type: 'shaft_assembly', dof: 1, total_issues: 2, critical_count: 0, recommendation: 'Proceed' },
+      };
+    }
+    if (mode === 'review') {
+      return {
+        issues: [{ id: 1, severity: 'warning', description: 'Clearance tight', fix: 'Increase gap' }],
+        correctedToml: body?.toml || '',
+        validation: { valid: true },
+      };
+    }
+    if (mode === 'build') {
+      return {
+        exports: [{ format: 'step', path: 'output/mock_design.step' }],
+        configPath: 'configs/generated/mock_design.toml',
+      };
+    }
+    return { error: `unknown design mode: ${mode}` };
+  }
+
+  if (method === 'POST' && path === '/fem') {
+    return {
+      max_displacement: 0.015,
+      max_stress: 98.7,
+      safety_factor: 2.54,
+      mesh_info: { nodes: 15200, elements: 9800 },
+      frequencies: body?.fem?.analysis_type === 'frequency' ? [45.2, 112.8, 234.5] : undefined,
+    };
+  }
+
   throw new Error(`mock endpoint not found: ${method} ${path}`);
 }
 

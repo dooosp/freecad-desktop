@@ -78,6 +78,8 @@ export async function loadRouteModules() {
   const { default: cacheRouter } = await import('./routes/cache.js');
   const { default: projectRouter } = await import('./routes/project.js');
   const { default: diagnosticsRouter } = await import('./routes/diagnostics.js');
+  const { default: designRouter } = await import('./routes/design.js');
+  const { default: femRouter } = await import('./routes/fem.js');
 
   return {
     analyzeRouter,
@@ -93,6 +95,8 @@ export async function loadRouteModules() {
     cacheRouter,
     projectRouter,
     diagnosticsRouter,
+    designRouter,
+    femRouter,
   };
 }
 
@@ -110,6 +114,8 @@ function mountRoutes(app, routers) {
   app.use('/api/cache', routers.cacheRouter);
   app.use('/api/project', routers.projectRouter);
   app.use('/api/diagnostics', routers.diagnosticsRouter);
+  app.use('/api', routers.designRouter);
+  app.use('/api', routers.femRouter);
 }
 
 function registerBuiltinEndpoints(app, freecadRoot) {

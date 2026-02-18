@@ -209,6 +209,10 @@ export function useBackend() {
   const runCost = useCallback((configPath, opts) => {
     return call('/cost', { configPath, ...opts });
   }, [call]);
+  const runDesign = useCallback((description) => call('/design', { description, mode: 'design' }), [call]);
+  const runDesignReview = useCallback((toml) => call('/design', { toml, mode: 'review' }), [call]);
+  const runDesignBuild = useCallback((toml) => call('/design', { toml, mode: 'build' }), [call]);
+  const runFem = useCallback((configPath, femConfig) => call('/fem', { configPath, fem: femConfig }), [call]);
   const generateReport = useCallback((configPath, opts) => {
     return call('/report', {
       configPath,
@@ -319,6 +323,7 @@ export function useBackend() {
     analyze, cancelAnalyze,
     inspect, create,
     runDfm, runDrawing, runTolerance, runCost,
+    runDesign, runDesignReview, runDesignBuild, runFem,
     generateReport, getExamples,
     importStep, saveStepConfig,
     getProfiles, getProfile, saveProfile, deleteProfile, compareProfiles,
