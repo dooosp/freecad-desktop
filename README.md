@@ -1,8 +1,13 @@
 # FreeCAD Studio
 
-**Desktop GUI for the [freecad-automation](https://github.com/dooosp/freecad-automation) engine.**
+**Desktop product layer for visualizing and operating the [freecad-automation](https://github.com/dooosp/freecad-automation) engine.**
 
-Load a TOML config or import a STEP file, then run drawing generation, DFM analysis, tolerance stack-up, and cost estimation from a single interface. Built with Tauri 2, React 19, and Three.js.
+Desktop application for the FreeCAD automation engine.
+
+This repository contains the desktop product layer.
+All CAD generation and analysis workflows are powered by [freecad-automation](https://github.com/dooosp/freecad-automation).
+
+Load a TOML config or import a STEP file, then run drawing generation, DFM analysis, tolerance stack-up, cost estimation, and export workflows from a single interface. Built with Tauri 2, React 19, and Three.js.
 
 ![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
